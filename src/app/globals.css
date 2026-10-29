@@ -221,3 +221,12 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
 @keyframes df-step-in { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
 @keyframes df-step-back { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .df-step-in, .df-step-back { animation: none; } }
+
+/* Printable plan */
+@media print { .site-header, .site-menu-btn, footer, .df-launcher { display: none !important; } }
+
+/* Reviews marquee */
+.df-marquee { animation: df-marquee 60s linear infinite; }
+.df-marquee:hover { animation-play-state: paused; }
+@keyframes df-marquee { to { transform: translateX(calc(-50% - 10px)); } }
+@media (prefers-reduced-motion: reduce) { .df-marquee { animation: none; } }

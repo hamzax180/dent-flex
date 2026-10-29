@@ -71,8 +71,8 @@ export default async function Overview({ searchParams }: { searchParams: Promise
             </p>
           </div>
           <form className="flex flex-wrap items-end gap-2 rounded-2xl bg-ivory/[0.07] p-2 backdrop-blur">
-            <label className="text-[11px] text-ivory/60">From<input type="date" name="from" defaultValue={from.toISOString().slice(0, 10)} className={`${inputCls} block border-ivory/10 bg-ivory/95 py-1.5`} /></label>
-            <label className="text-[11px] text-ivory/60">To<input type="date" name="to" defaultValue={to.toISOString().slice(0, 10)} className={`${inputCls} block border-ivory/10 bg-ivory/95 py-1.5`} /></label>
+            <label className="text-[11px] text-ivory/60">From<input type="date" name="from" defaultValue={from.toISOString().slice(0, 10)} className={`${inputCls} block border-ivory/10 bg-ivory/95 py-1.5 text-ink [color-scheme:light]`} /></label>
+            <label className="text-[11px] text-ivory/60">To<input type="date" name="to" defaultValue={to.toISOString().slice(0, 10)} className={`${inputCls} block border-ivory/10 bg-ivory/95 py-1.5 text-ink [color-scheme:light]`} /></label>
             <button className="rounded-xl bg-sage px-4 py-2 font-medium text-forest transition hover:bg-[#cdd3b6]">Apply</button>
           </form>
         </div>

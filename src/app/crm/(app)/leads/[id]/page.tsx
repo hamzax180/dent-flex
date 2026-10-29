@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/errors";
 import { Badge, Card, Empty, PageHeader, STATUS_LABEL, ScoreBadge, fmt } from "@/components/crm/ui";
 import { ActionButton } from "@/components/crm/actions";
+import { LeadExtras } from "./extras";
 import { LeadEditor, NoteForm, TaskForm, OverrideForm, ConsentForm, ConfirmRequestForm } from "./forms";
 
 export default async function LeadDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -73,6 +74,8 @@ export default async function LeadDetail({ params }: { params: Promise<{ id: str
               />
             </Card>
           )}
+
+          <LeadExtras leadId={lead.id} />
 
           <Card title="Conversion-readiness score">
             <p className="mb-3 text-xs text-muted">{lead.scoreExplainer}</p>

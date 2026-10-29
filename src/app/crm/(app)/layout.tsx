@@ -9,7 +9,7 @@ import { CrmShell, type NavGroup } from "./nav";
 export const metadata: Metadata = { title: { default: "CRM", template: "%s · Dent Flex CRM" }, robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-type Item = { href: string; label: string; icon: IconName; perm: Permission; count?: "newLeads" | "requested" | "overdue" };
+type Item = { href: string; label: string; icon: IconName; perm: Permission; count?: "newLeads" | "requested" | "overdue" | "plans" };
 const GROUPS: { label: string; items: Item[] }[] = [
   {
     label: "Work",
@@ -17,6 +17,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
       { href: "/crm", label: "Overview", icon: "home", perm: "leads:read" },
       { href: "/crm/leads", label: "Leads", icon: "users", perm: "leads:read", count: "newLeads" },
       { href: "/crm/pipeline", label: "Pipeline", icon: "columns", perm: "leads:read" },
+      { href: "/crm/plans", label: "Treatment plans", icon: "tooth", perm: "leads:read", count: "plans" },
       { href: "/crm/appointments", label: "Appointments", icon: "calendar", perm: "appointments:read", count: "requested" },
       { href: "/crm/tasks", label: "Tasks", icon: "tasks", perm: "tasks:read", count: "overdue" },
     ],
@@ -45,12 +46,13 @@ const GROUPS: { label: string; items: Item[] }[] = [
 export default async function CrmLayout({ children }: { children: React.ReactNode }) {
   const staff = await requirePageStaff();
   const scope = leadScope(staff);
-  const [newLeads, requested, overdue] = await Promise.all([
+  const [newLeads, requested, overdue, plans] = await Promise.all([
     can(staff.role, "leads:read") ? prisma.lead.count({ where: { AND: [scope, { status: "NEW" }] } }) : 0,
     can(staff.role, "appointments:read") ? prisma.appointmentRequest.count({ where: { status: { in: ["REQUESTED", "IN_REVIEW"] }, lead: scope } }) : 0,
     can(staff.role, "tasks:read") ? prisma.task.count({ where: { status: "OPEN", dueAt: { lt: new Date() }, ...(staff.role === "CLINICIAN" ? { ownerId: staff.id } : {}) } }) : 0,
+    can(staff.role, "leads:read") ? prisma.treatmentPlan.count({ where: { status: "REQUESTED", lead: scope } }) : 0,
   ]);
-  const counts = { newLeads, requested, overdue };
+  const counts = { newLeads, requested, overdue, plans };
   const groups: NavGroup[] = GROUPS.map((g) => ({
     label: g.label,
     items: g.items

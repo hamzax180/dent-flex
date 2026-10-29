@@ -18,7 +18,14 @@ export default async function TeamPage() {
             <TeamPhoto name={m.name} photoUrl={m.photoUrl} isPlaceholder={m.isPlaceholder} placeholderLabel={t.team.placeholder} className="aspect-[4/5]" />
             <h2 className="mt-4 display text-2xl text-forest">{m.name}</h2>
             <p className="text-sm text-muted">{m.title}</p>
+            {!m.isPlaceholder && m.credentials && <p className="mt-2 text-xs leading-relaxed text-forest/70">{m.credentials}</p>}
             <p className="mt-3 text-sm leading-relaxed text-ink">{m.bio}</p>
+            {!m.isPlaceholder && (m.specialties.length > 0 || m.languages.length > 0) && (
+              <p className="mt-4 flex flex-wrap gap-1.5">
+                {m.specialties.map((x) => <span key={x} className="rounded-full bg-forest px-2.5 py-0.5 text-[11px] text-ivory">{x}</span>)}
+                {m.languages.map((x) => <span key={x} className="rounded-full border border-forest/20 px-2.5 py-0.5 text-[11px] text-forest">{x}</span>)}
+              </p>
+            )}
           </li>
         ))}
       </ul>

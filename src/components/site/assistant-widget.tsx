@@ -124,6 +124,17 @@ function Cards({ cards, lang }: { cards: AssistantCard[]; lang: Lang }) {
     <div className="mt-2 space-y-2">
       {cards.map((card, i) => {
         if (card.type === "comparison") return <ComparisonCard key={i} card={card} lang={lang} />;
+        if (card.type === "freePlan")
+          return (
+            <Link key={i} href={card.url} className="df-rise flex items-center gap-3 bg-forest p-4 text-ivory shadow-sm transition hover:bg-forest-700">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sage text-forest">✦</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium">{tr ? "Ücretsiz tedavi planınızı alın" : "Get your free treatment plan"}</span>
+                <span className="block text-xs text-ivory/65">{tr ? "Röntgen veya fotoğraf gönderin, hekimimiz yazılı plan hazırlasın" : "Send an X-ray or photos, the dentist writes your plan"}</span>
+              </span>
+              <span aria-hidden>→</span>
+            </Link>
+          );
         if (card.type === "treatments")
           return (
             <ul key={i} className="divide-y divide-forest/10 border border-forest/10 bg-white text-sm">

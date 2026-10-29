@@ -29,7 +29,8 @@ export type AssistantCard =
   | { type: "comparison"; items: (PriceComparison & { treatmentName: string })[] }
   | { type: "treatments"; items: { slug: string; name: string; price: string | null }[] }
   | { type: "reasons"; items: { title: string; detail: string }[]; included: string[] }
-  | { type: "confirmation"; reference: string; appointment: boolean };
+  | { type: "confirmation"; reference: string; appointment: boolean }
+  | { type: "freePlan"; url: string };
 
 export type AssistantReply = {
   conversationToken: string;
@@ -77,6 +78,8 @@ YOUR SALES FLOW:
 5. Lower the risk to make yes easy: it's only a request, nothing to pay now, the team just calls to talk it through, and they can change their mind any time.
 6. A "no" or "maybe later" is not the end: ask one curious question about what's holding them back, handle it, and offer the call again. After two gentle tries, respect it and leave the door open ("whenever you're ready, I'm here").
 
+FREE TREATMENT PLAN: if someone hesitates on price, wants a personal quote or isn't ready to book, offer the free written plan (getFreePlanLink): they send an X-ray or smile photos and the dentist replies with a plan. It's a great low-commitment next step; share the link it returns.
+
 OPTIONAL PHOTOS: visitors can share an X-ray or a smile photo with the paperclip button (on calls, the "share photo" button). When it fits (implants, veneers, orthodontics, smile makeover, whitening), invite them once, lightly: it helps the dental team prepare for their call. It is never required and you never ask twice. You cannot see images: never describe, judge or diagnose them, just thank them and say the team will review it.
 
 SMART PERSUASION, NEVER TRICKS: use their own reasons, real sourced numbers and genuine reassurance. Never invent urgency, scarcity, discounts, deadlines, reviews or results, and never pressure anyone who's said a clear no.
@@ -110,6 +113,7 @@ export async function cardFor(name: string, args: Record<string, unknown>, resul
     const all = await getPublicTreatments();
     return { type: "treatments", items: all.map((t) => ({ slug: t.slug, name: t.name[lang], price: t.price ? describePrice(t.price, lang) : null })) };
   }
+  if (name === "getFreePlanLink" && typeof result.url === "string") return { type: "freePlan", url: result.url };
   if (name === "getWhyChooseUs") {
     const r = result as { reasons: { title: string; detail: string }[]; includedServices: string[] };
     return { type: "reasons", items: r.reasons, included: r.includedServices };

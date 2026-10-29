@@ -147,6 +147,8 @@ model Lead {
   consents            ConsentRecord[]
   conversations       Conversation[]
   appointmentRequests AppointmentRequest[]
+  plans               TreatmentPlan[]
+  uploads             Upload[]
   appointments        Appointment[]
   tasks               Task[]
   notes               Note[]
@@ -589,6 +591,10 @@ model TeamMember {
   name          String
   title         String
   bio           String
+  /// e.g. "DDS, Istanbul University · Implantology". Only verified facts.
+  credentials   String        @default("")
+  languages     String[]      @default([])
+  specialties   String[]      @default([])
   photoUrl      String?
   isPlaceholder Boolean       @default(true)
   status        ContentStatus @default(DRAFT)
@@ -874,9 +880,14 @@ enum UploadKind {
 /// Optional files a visitor shares in chat or on a call (X-ray, smile photo). Health data:
 /// stored only with explicit consent, never sent to the AI model, staff-only access.
 model Upload {
-  id             String       @id @default(uuid()) @db.Uuid
-  conversationId String       @db.Uuid
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id             String         @id @default(uuid()) @db.Uuid
+  conversationId String?        @db.Uuid
+  conversation   Conversation?  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// Files sent with a free treatment plan request belong to the lead and the plan directly.
+  leadId         String?        @db.Uuid
+  lead           Lead?          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  planId         String?        @db.Uuid
+  plan           TreatmentPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
   kind           UploadKind
   treatmentSlug  String?
   fileName       String
@@ -888,6 +899,8 @@ model Upload {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+  @@index([leadId])
+  @@index([planId])
 }
 
 /// One row per behaviour signal per conversation (deduplicated), e.g. "uploaded_xray".
@@ -900,4 +913,61 @@ model EngagementSignal {
   createdAt      DateTime     @default(now())
 
   @@unique([conversationId, type])
+}
+
+enum PlanStatus {
+  REQUESTED // visitor sent files, waiting for the dentist
+  DRAFT
+  SENT
+  ACCEPTED // patient asked to book from the plan
+}
+
+/// A written, individual treatment estimate prepared by the dentist from the patient's X-ray/photos.
+/// Sent only to the person who asked for it (not public advertising). Always "subject to examination".
+model TreatmentPlan {
+  id            String     @id @default(uuid()) @db.Uuid
+  publicId      String     @unique
+  /// Unguessable link for the patient view (/plan/:token)
+  token         String     @unique
+  leadId        String     @db.Uuid
+  lead          Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  treatmentSlug String?
+  country       String?
+  status        PlanStatus @default(REQUESTED)
+  /// [{ treatment, area, qty, unitMinor, currency }]
+  items         Json       @default("[]")
+  notes         String?
+  validUntil    DateTime?
+  preparedById  String?    @db.Uuid
+  sentAt        DateTime?
+  viewedAt      DateTime?
+  acceptedAt    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  uploads       Upload[]
+
+  @@index([status, createdAt])
+  @@index([leadId])
+}
+
+enum ReviewSource {
+  GOOGLE
+  TRUSTPILOT
+  CLINIC
+}
+
+/// Genuine patient reviews, shown only with the patient's consent and only if the site switch is on.
+model Testimonial {
+  id        String        @id @default(uuid()) @db.Uuid
+  author    String // first name + initial
+  country   String        @default("")
+  treatment String        @default("")
+  quote     String
+  rating    Int           @default(5)
+  source    ReviewSource  @default(CLINIC)
+  sourceUrl String?
+  consentAt DateTime?
+  status    ContentStatus @default(DRAFT)
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now())
 }

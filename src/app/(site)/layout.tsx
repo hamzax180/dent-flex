@@ -18,10 +18,10 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
   ]);
   return (
     <>
-      <SiteHeader t={t} lang={lang} phone={clinic.isPlaceholder ? null : clinic.phone} />
+      <SiteHeader t={t} lang={lang} phone={clinic.isPlaceholder ? null : clinic.phone} whatsapp={clinic.whatsapp} />
       <main id="main">{children}</main>
       <SiteFooter t={t} clinic={clinic} />
-      <MobileCta assistantName={sales.assistantName} team={team} lang={lang} />
+      <MobileCta assistantName={sales.assistantName} team={team} lang={lang} whatsapp={clinic.whatsapp} />
       <AssistantWidget t={t} lang={lang} assistantName={sales.assistantName} team={team} callsEnabled={voiceEnabled()} />
       <RevealOnScroll />
     </>

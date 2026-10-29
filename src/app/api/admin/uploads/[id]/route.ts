@@ -12,8 +12,9 @@ export const GET = route<Ctx>(async (req, { params }) => {
   const { id } = await params;
   const upload = await prisma.upload.findUnique({ where: { id }, include: { conversation: { select: { leadId: true } } } });
   if (!upload) throw new ApiError("NOT_FOUND", "File not found.");
-  if (upload.conversation.leadId) {
-    const visible = await prisma.lead.count({ where: { AND: [leadScope(staff), { id: upload.conversation.leadId }] } });
+  const leadId = upload.leadId ?? upload.conversation?.leadId;
+  if (leadId) {
+    const visible = await prisma.lead.count({ where: { AND: [leadScope(staff), { id: leadId }] } });
     if (!visible) throw new ApiError("NOT_FOUND", "File not found.");
   }
   await audit(prisma, { actorId: staff.id, action: "upload.viewed", entityType: "Upload", entityId: upload.id });

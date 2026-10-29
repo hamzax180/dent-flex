@@ -46,7 +46,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         <label className="text-xs text-muted">From<input type="date" name="from" defaultValue={f.from} className={`${inputCls} block`} /></label>
         <label className="text-xs text-muted">To<input type="date" name="to" defaultValue={f.to} className={`${inputCls} block`} /></label>
         <label className="text-xs text-muted">Sort
-          <select name="sort" defaultValue={f.sort} className={`${inputCls} block`}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="score">Score</option></select>
+          <select name="sort" defaultValue={f.sort} className={`${inputCls} block`}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="score">Score</option><option value="interest">Most engaged</option></select>
         </label>
         <button className="rounded-lg bg-forest px-3 py-1.5 text-ivory">Filter</button>
         <Link href="/crm/leads" className="px-2 py-1.5 text-forest underline">Reset</Link>
@@ -58,7 +58,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         <div className="overflow-x-auto rounded-xl border border-forest/10 bg-white">
           <table className="w-full min-w-[760px]">
             <thead className="border-b border-forest/10 bg-sage-50/50">
-              <tr><th className={th}>Lead</th><th className={th}>Contact</th><th className={th}>Status</th><th className={th}>Score</th><th className={th}>Interest</th><th className={th}>Source</th><th className={th}>Owner</th><th className={th}>Created</th></tr>
+              <tr><th className={th}>Lead</th><th className={th}>Contact</th><th className={th}>Status</th><th className={th}>Score</th><th className={th}>Engagement</th><th className={th}>Treatment</th><th className={th}>Source</th><th className={th}>Owner</th><th className={th}>Created</th></tr>
             </thead>
             <tbody className="divide-y divide-forest/5">
               {data.rows.map((r) => (
@@ -67,6 +67,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   <td className={td}><div>{r.phone ?? "—"}</div><div className="text-xs text-muted">{r.email ?? ""}</div></td>
                   <td className={td}>{STATUS_LABEL[r.status]}</td>
                   <td className={td}><ScoreBadge total={r.scoreTotal} band={r.scoreBand} override={r.scoreOverride} /></td>
+                  <td className={td}>
+                    <span className="flex items-center gap-2" title={`Engagement ${r.interestScore}/100`}>
+                      <span className="h-1.5 w-14 overflow-hidden rounded-full bg-[#eef0e6]"><span className="block h-full rounded-full bg-forest" style={{ width: `${r.interestScore}%` }} /></span>
+                      <span className="text-xs tabular-nums text-muted">{r.interestScore}</span>
+                    </span>
+                  </td>
                   <td className={td}>{r.treatment?.nameEn ?? "—"}</td>
                   <td className={td}>{r.source.replace(/_/g, " ").toLowerCase()}</td>
                   <td className={td}>{r.owner?.name ?? <span className="text-muted">Unassigned</span>}</td>

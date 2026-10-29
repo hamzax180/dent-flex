@@ -19,19 +19,31 @@ function sniff(b: Buffer): string | null {
 
 const SIGNAL: Record<UploadKindName, SignalType> = { XRAY: "uploaded_xray", SMILE_PHOTO: "uploaded_smile_photo", OTHER: "uploaded_file" };
 
+/** Validates a browser file (size + real type from magic bytes) and returns what we store. */
+export async function readUploadFile(file: File) {
+  if (file.size === 0) throw new ApiError("VALIDATION_ERROR", "That file is empty.");
+  if (file.size > MAX_UPLOAD_BYTES) throw new ApiError("VALIDATION_ERROR", "Please choose a file under 8 MB.");
+  const data = Buffer.from(await file.arrayBuffer());
+  const mime = sniff(data);
+  if (!mime) throw new ApiError("VALIDATION_ERROR", "Please upload a JPG, PNG, WebP, HEIC photo or a PDF.");
+  return {
+    data,
+    mime,
+    sizeBytes: data.length,
+    fileName: file.name.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "upload",
+    sha256: createHash("sha256").update(data).digest("hex"),
+  };
+}
+
 export async function saveUpload(input: {
   conversationToken: string; kind: UploadKindName; treatmentSlug?: string | null; consent: boolean; file: File;
 }) {
   if (!input.consent) throw new ApiError("VALIDATION_ERROR", "Please tick the box to agree before sharing an image.");
-  if (input.file.size === 0) throw new ApiError("VALIDATION_ERROR", "That file is empty.");
-  if (input.file.size > MAX_UPLOAD_BYTES) throw new ApiError("VALIDATION_ERROR", "Please choose a file under 8 MB.");
   const conv = await prisma.conversation.findUnique({ where: { publicToken: input.conversationToken }, include: { _count: { select: { uploads: true } } } });
   if (!conv || conv.status === "CLOSED") throw new ApiError("NOT_FOUND", "Conversation not found.");
   if (conv._count.uploads >= 6) throw new ApiError("RATE_LIMITED", "You've shared the maximum number of files for this chat.");
 
-  const data = Buffer.from(await input.file.arrayBuffer());
-  const mime = sniff(data);
-  if (!mime) throw new ApiError("VALIDATION_ERROR", "Please upload a JPG, PNG, WebP, HEIC photo or a PDF.");
+  const file = await readUploadFile(input.file);
   const treatment = input.treatmentSlug ? await prisma.treatment.findUnique({ where: { slug: input.treatmentSlug }, select: { slug: true } }) : null;
 
   const upload = await prisma.upload.create({
@@ -39,11 +51,7 @@ export async function saveUpload(input: {
       conversationId: conv.id,
       kind: input.kind,
       treatmentSlug: treatment?.slug ?? null,
-      fileName: input.file.name.replace(/[^\w.\- ]+/g, "_").slice(0, 120) || "upload",
-      mime,
-      sizeBytes: data.length,
-      sha256: createHash("sha256").update(data).digest("hex"),
-      data,
+      ...file,
       consentAt: new Date(),
     },
     select: { id: true, kind: true, treatmentSlug: true, mime: true, sizeBytes: true, createdAt: true },

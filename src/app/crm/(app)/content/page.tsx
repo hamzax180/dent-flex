@@ -2,16 +2,19 @@ import { requirePageStaff } from "@/lib/auth/page";
 import { prisma } from "@/lib/db";
 import { Badge, Card, PageHeader } from "@/components/crm/ui";
 import { ActionButton } from "@/components/crm/actions";
-import { FaqForm, TeamForm, TreatmentForm } from "./forms";
+import { getSetting } from "@/lib/settings";
+import { FaqForm, ReviewForm, TeamForm, TreatmentForm } from "./forms";
 
 export const metadata = { title: "Website content" };
 
 export default async function ContentPage() {
   await requirePageStaff("settings:manage");
-  const [treatments, faqs, team] = await Promise.all([
+  const [treatments, faqs, team, reviews, features] = await Promise.all([
     prisma.treatment.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.faq.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.teamMember.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.testimonial.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }] }),
+    getSetting("site_features"),
   ]);
   return (
     <>
@@ -83,6 +86,32 @@ export default async function ContentPage() {
           <details className="mt-3 border-t border-forest/10 pt-3">
             <summary className="cursor-pointer text-forest">+ Add team member</summary>
             <TeamForm />
+          </details>
+        </Card>
+
+        <Card title={`Patient reviews (${reviews.length})`}>
+          <p className="mb-3 text-xs text-muted">
+            Only real reviews, in the patient&apos;s own words, with their permission. Reviews show on the website only when <b>Settings › site_features › showReviews</b> is on
+            ({features.showReviews ? "currently ON" : "currently OFF"}), which should wait for legal confirmation under Turkish health-advertising rules.
+          </p>
+          <ul className="divide-y divide-forest/10">
+            {reviews.map((r) => (
+              <li key={r.id} className="py-2">
+                <details>
+                  <summary className="flex cursor-pointer flex-wrap items-center gap-2">
+                    <span className="font-medium">{r.author}</span><span className="text-gold">{"★".repeat(r.rating)}</span><span className="text-muted">{r.treatment}</span>
+                    <Badge tone={r.status === "PUBLISHED" ? "good" : "warn"}>{r.status.toLowerCase()}</Badge>
+                    {!r.consentAt && <Badge tone="warn">no permission</Badge>}
+                  </summary>
+                  <ReviewForm id={r.id} initial={r} />
+                  <div className="mt-2"><ActionButton url={`/api/admin/content/reviews/${r.id}`} method="DELETE" label="Delete review" variant="danger" confirm="Delete this review?" /></div>
+                </details>
+              </li>
+            ))}
+          </ul>
+          <details className="mt-3 border-t border-forest/10 pt-3">
+            <summary className="cursor-pointer text-forest">+ Add review</summary>
+            <ReviewForm />
           </details>
         </Card>
       </div>

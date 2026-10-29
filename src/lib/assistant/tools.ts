@@ -38,6 +38,7 @@ export const TOOL_SCHEMAS = {
   getClinicInfo: z.object({}),
   getPriceComparison: z.object({ treatment: z.string().max(80).optional(), market: z.string().regex(/^[A-Za-z]{2}$/).optional() }),
   getWhyChooseUs: z.object({}),
+  getFreePlanLink: z.object({ treatment: z.string().max(60).optional() }),
   createLead: leadArgs,
   createAppointmentRequest: leadArgs.extend({ preferredDate: z.string().max(60).optional() }),
   handoffToStaff: z.object({ reason: z.enum(["clinical_question", "unknown_answer", "complaint", "visitor_request", "emergency", "other"]), note: z.string().max(300).optional() }),
@@ -52,6 +53,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   getPriceComparison:
     "Compare our published price with sourced reference prices in another country (market = ISO code like GB, US, DE). Use whenever price, cost, savings or 'why Turkey' comes up. Quote ONLY the numbers returned, mention the source, and say final prices follow an examination.",
   getWhyChooseUs: "Get the clinic-approved reasons to choose Dent Flex and the services included around treatment. Use these — never invent claims.",
+  getFreePlanLink:
+    "Get the link to the free treatment plan page, where the visitor uploads an X-ray or smile photos and the dentist sends a written plan. Offer it when someone hesitates on price or wants a personal quote. treatment = slug like implants, veneers.",
   createLead: "Send the visitor's contact request to reception. Only after the visitor has given a name and phone or email AND ticked the consent box.",
   createAppointmentRequest: "Send an appointment REQUEST to reception (not a confirmed booking). Same requirements as createLead.",
   handoffToStaff: "Flag the conversation for a human (clinical questions, complaints, unknown answers, or when asked).",
@@ -141,6 +144,11 @@ async function runTool(name: string, rawArgs: unknown, ctx: ToolContext): Promis
     case "getWhyChooseUs": {
       const s = await getSetting("sales_profile");
       return { reasons: s.sellingPoints, includedServices: s.includedServices, rule: "Use only these points. No superlatives like 'best' or 'cheapest' and no guarantees of results." };
+    }
+    case "getFreePlanLink": {
+      const slug = typeof args.treatment === "string" ? args.treatment.toLowerCase().replace(/[^a-z-]/g, "") : "";
+      const known = slug ? await prisma.treatment.findFirst({ where: { slug, active: true, approved: true }, select: { slug: true } }) : null;
+      return { url: `/free-plan${known ? `?treatment=${known.slug}` : ""}`, note: "Free and no obligation. The dentist reviews their images and sends a written estimate; the final plan follows an examination." };
     }
     case "createLead":
     case "createAppointmentRequest": {

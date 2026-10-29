@@ -17,7 +17,7 @@ export const dict = {
       title: "Unhurried dental care, explained clearly.",
       body: "Tell us what you are looking for and our reception team will get back to you to arrange a consultation. No account needed.",
       primary: "Request an appointment",
-      secondary: "Ask a question",
+      secondary: "Get a free treatment plan",
     },
     trust: {
       title: "What we can tell you today",
@@ -109,7 +109,7 @@ export const dict = {
       title: "Acelesiz, açıkça anlatılan diş bakımı.",
       body: "Ne aradığınızı bize iletin; resepsiyon ekibimiz muayene planlamak için size dönüş yapsın. Hesap oluşturmanız gerekmez.",
       primary: "Randevu talep et",
-      secondary: "Soru sor",
+      secondary: "Ücretsiz tedavi planı al",
     },
     trust: {
       title: "Bugün size söyleyebileceklerimiz",

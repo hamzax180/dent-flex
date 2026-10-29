@@ -9,10 +9,11 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   await requirePageStaff("settings:manage");
-  const [clinic, privacy, sales, audit] = await Promise.all([
+  const [clinic, privacy, sales, features, audit] = await Promise.all([
     getSetting("clinic_info"),
     getSetting("privacy"),
     getSetting("sales_profile"),
+    getSetting("site_features"),
     prisma.auditEvent.findMany({ orderBy: { createdAt: "desc" }, take: 40, include: { actor: { select: { name: true } } } }),
   ]);
   return (
@@ -29,6 +30,10 @@ export default async function SettingsPage() {
             <code> includedServices</code> lists extras you really provide (e.g. airport transfer) — leave empty until confirmed.
           </p>
           <JsonSettingForm settingKey="sales_profile" initial={sales} />
+        </Card>
+        <Card title="Website switches">
+          <p className="mb-2 text-xs text-muted"><code>showReviews</code>: show published patient reviews on the website. Turn on only after a lawyer confirms reviews are allowed under Turkish health-advertising rules.</p>
+          <JsonSettingForm settingKey="site_features" initial={features} />
         </Card>
         <Card title="Privacy & retention">
           <p className="mb-2 text-xs text-muted">Turn on transcript storage only after the clinic has documented a retention purpose and period. Raw voice audio is never stored.</p>

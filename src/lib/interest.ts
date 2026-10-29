@@ -7,6 +7,7 @@ import { prisma } from "./db";
  * behaviour (did they upload, call, compare prices…), never from what an image or message says.
  */
 export const SIGNALS = {
+  requested_plan: { points: 20, label: "Asked for a free treatment plan" },
   uploaded_xray: { points: 25, label: "Uploaded an X-ray" },
   uploaded_smile_photo: { points: 15, label: "Uploaded a smile photo" },
   uploaded_file: { points: 8, label: "Shared a file" },
@@ -51,9 +52,19 @@ export async function refreshConversationInterest(db: Db, conversationId: string
   return db.conversation.update({ where: { id: conversationId }, data: { interestScore: scoreSignals(signals.map((s) => s.type)) }, select: { leadId: true } });
 }
 
+/** Signals that belong to the lead itself (free plan requests and the files sent with them). */
+async function leadLevelSignals(db: Db, leadId: string): Promise<SignalType[]> {
+  const [plans, uploads] = await Promise.all([
+    db.treatmentPlan.count({ where: { leadId } }),
+    db.upload.findMany({ where: { leadId }, select: { kind: true }, distinct: ["kind"] }),
+  ]);
+  const kinds: Record<string, SignalType> = { XRAY: "uploaded_xray", SMILE_PHOTO: "uploaded_smile_photo", OTHER: "uploaded_file" };
+  return [...(plans ? (["requested_plan"] as const) : []), ...uploads.map((u) => kinds[u.kind])];
+}
+
 export async function refreshLeadInterest(db: Db, leadId: string) {
   const convs = await db.conversation.findMany({ where: { leadId }, select: { signals: { select: { type: true } } } });
-  const score = scoreSignals(convs.flatMap((c) => c.signals.map((s) => s.type)), convs.length);
+  const score = scoreSignals([...convs.flatMap((c) => c.signals.map((s) => s.type)), ...(await leadLevelSignals(db, leadId))], convs.length);
   await db.lead.update({ where: { id: leadId }, data: { interestScore: score } });
   return score;
 }
@@ -66,6 +77,7 @@ export async function leadInterest(leadId: string) {
   });
   const seen = new Map<string, Date>();
   for (const c of convs) for (const s of c.signals) if (!seen.has(s.type)) seen.set(s.type, s.createdAt);
+  for (const t of await leadLevelSignals(prisma, leadId)) if (!seen.has(t)) seen.set(t, new Date());
   const items = [...seen.entries()]
     .filter(([t]) => t in SIGNALS)
     .map(([t, at]): { type: string; label: string; points: number; at: Date } => ({ type: t, label: SIGNALS[t as SignalType].label, points: SIGNALS[t as SignalType].points, at }));

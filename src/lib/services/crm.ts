@@ -39,7 +39,7 @@ export const leadFilterSchema = z.object({
   owner: z.string().max(40).optional(), // uuid | "me" | "none"
   from: z.string().date().optional(),
   to: z.string().date().optional(),
-  sort: z.enum(["newest", "oldest", "score"]).default("newest"),
+  sort: z.enum(["newest", "oldest", "score", "interest"]).default("newest"),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(25),
 });
@@ -71,14 +71,16 @@ export async function listLeads(staff: Staff, raw: Record<string, string | undef
     ],
   };
   const orderBy: Prisma.LeadOrderByWithRelationInput[] =
-    f.sort === "score" ? [{ scoreTotal: "desc" }, { createdAt: "desc" }] : [{ createdAt: f.sort === "oldest" ? "asc" : "desc" }];
+    f.sort === "score" ? [{ scoreTotal: "desc" }, { createdAt: "desc" }]
+    : f.sort === "interest" ? [{ interestScore: "desc" }, { createdAt: "desc" }]
+    : [{ createdAt: f.sort === "oldest" ? "asc" : "desc" }];
   const [total, rows] = await Promise.all([
     prisma.lead.count({ where }),
     prisma.lead.findMany({
       where, orderBy, skip: (f.page - 1) * f.pageSize, take: f.pageSize,
       select: {
         id: true, publicId: true, fullName: true, email: true, phone: true, status: true, source: true, scoreTotal: true, scoreBand: true,
-        scoreOverride: true, createdAt: true, language: true, treatment: { select: { nameEn: true } }, owner: { select: { name: true } },
+        scoreOverride: true, interestScore: true, createdAt: true, language: true, treatment: { select: { nameEn: true } }, owner: { select: { name: true } },
       },
     }),
   ]);

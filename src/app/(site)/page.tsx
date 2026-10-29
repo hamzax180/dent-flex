@@ -8,18 +8,23 @@ import { SiteImage } from "@/components/site/site-image";
 import { HeroFilm } from "@/components/site/hero-film";
 import { TeamPhoto } from "@/components/site/team-photo";
 import { SlideRow } from "@/components/site/slide-row";
+import { Reviews } from "@/components/site/reviews";
 
 const APART_ICONS = ["talk", "price", "globe", "person"];
 
 export default async function Home() {
   const { t, lang } = await getDict();
   const h = t.home;
-  const [clinic, treatments, faqs, team] = await Promise.all([
+  const [clinic, treatments, faqs, team, features, reviews] = await Promise.all([
     getSetting("clinic_info"),
     getPublicTreatments(),
     prisma.faq.findMany({ where: { status: "PUBLISHED" }, orderBy: { sortOrder: "asc" } }),
     prisma.teamMember.findMany({ where: { status: "PUBLISHED" }, orderBy: { sortOrder: "asc" }, take: 2 }),
+    getSetting("site_features"),
+    // Reviews show only if the site switch is on, and only published reviews with the patient's permission.
+    prisma.testimonial.findMany({ where: { status: "PUBLISHED", consentAt: { not: null } }, orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }], take: 12 }),
   ]);
+  const showReviews = features.showReviews && reviews.length > 0;
 
   return (
     <>
@@ -32,7 +37,7 @@ export default async function Home() {
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-ivory/90">{t.hero.body}</p>
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">
             <Btn href="/contact#request" arrow>{t.hero.primary}</Btn>
-            <Btn href="#faq" variant="outline-light">{t.hero.secondary}</Btn>
+            <Btn href="/free-plan" variant="outline-light">{t.hero.secondary}</Btn>
           </div>
         </div>
       </section>
@@ -76,6 +81,10 @@ export default async function Home() {
               <figcaption className="mt-4 sm:mt-5">
                 <p className="display text-xl sm:text-2xl">{m?.name ?? t.team.placeholder}</p>
                 <p className="mt-1 text-sm text-sage">{m?.title ?? "—"}</p>
+                {m && !m.isPlaceholder && m.credentials && <p className="mt-2 text-xs leading-relaxed text-ivory/60">{m.credentials}</p>}
+                {m && !m.isPlaceholder && m.specialties.length > 0 && (
+                  <p className="mt-3 flex flex-wrap gap-1.5">{m.specialties.map((x) => <span key={x} className="rounded-full border border-ivory/20 px-2.5 py-0.5 text-[11px] text-ivory/80">{x}</span>)}</p>
+                )}
               </figcaption>
             </figure>
           ))}
@@ -121,10 +130,14 @@ export default async function Home() {
       <section className="px-4 pb-16 sm:px-6 sm:pb-24">
         <div className="mx-auto max-w-7xl">
           <h2 className="reveal display text-4xl text-forest sm:text-[3.25rem]">{h.reviewsTitle}</h2>
-          <div className="reveal mt-10 border border-dashed border-forest/25 bg-ivory/60 px-8 py-12 text-center">
-            <p className="text-forest/60" aria-hidden>☆ ☆ ☆ ☆ ☆</p>
-            <p className="mx-auto mt-3 max-w-xl text-sm text-muted">{t.testimonials.placeholder}</p>
-          </div>
+          {showReviews ? (
+            <Reviews items={reviews} />
+          ) : (
+            <div className="reveal mt-10 border border-dashed border-forest/25 bg-ivory/60 px-8 py-12 text-center">
+              <p className="text-forest/60" aria-hidden>☆ ☆ ☆ ☆ ☆</p>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-muted">{t.testimonials.placeholder}</p>
+            </div>
+          )}
         </div>
       </section>
 

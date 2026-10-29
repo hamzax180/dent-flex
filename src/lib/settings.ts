@@ -48,6 +48,12 @@ export const privacySettingsSchema = z.object({
 });
 export type PrivacySettings = z.infer<typeof privacySettingsSchema>;
 
+/** Public-site switches that need a legal/compliance decision before they are turned on. */
+export const siteFeaturesSchema = z.object({
+  showReviews: z.boolean(),
+});
+export type SiteFeatures = z.infer<typeof siteFeaturesSchema>;
+
 export const DEFAULTS = {
   clinic_info: {
     name: "Dent Flex",
@@ -87,6 +93,7 @@ export const DEFAULTS = {
     includedServices: [],
     comparisonMarkets: ["GB", "US", "DE"],
   } satisfies SalesProfile,
+  site_features: { showReviews: false } satisfies SiteFeatures,
   privacy: {
     storeTranscripts: false,
     transcriptRetentionDays: 30,
@@ -99,6 +106,7 @@ const SCHEMAS = {
   automation_governance: automationGovernanceSchema,
   privacy: privacySettingsSchema,
   sales_profile: salesProfileSchema,
+  site_features: siteFeaturesSchema,
 };
 type Key = keyof typeof SCHEMAS;
 type Value<K extends Key> = z.infer<(typeof SCHEMAS)[K]>;
