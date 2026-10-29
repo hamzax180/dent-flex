@@ -1,19 +1,18 @@
 import { requirePageStaff } from "@/lib/auth/page";
 import { prisma } from "@/lib/db";
 import { getSetting } from "@/lib/settings";
-import { Badge, Card, PageHeader, fmt, td, th } from "@/components/crm/ui";
-import { ActionButton } from "@/components/crm/actions";
-import { JsonSettingForm, NewUserForm } from "./forms";
+import Link from "next/link";
+import { Card, PageHeader, fmt } from "@/components/crm/ui";
+import { JsonSettingForm } from "./forms";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
-  const me = await requirePageStaff("settings:manage");
-  const [clinic, privacy, sales, users, audit] = await Promise.all([
+  await requirePageStaff("settings:manage");
+  const [clinic, privacy, sales, audit] = await Promise.all([
     getSetting("clinic_info"),
     getSetting("privacy"),
     getSetting("sales_profile"),
-    prisma.staffUser.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, email: true, name: true, role: true, active: true } }),
     prisma.auditEvent.findMany({ orderBy: { createdAt: "desc" }, take: 40, include: { actor: { select: { name: true } } } }),
   ]);
   return (
@@ -36,20 +35,8 @@ export default async function SettingsPage() {
           <JsonSettingForm settingKey="privacy" initial={privacy} />
         </Card>
         <Card title="Staff users & roles">
-          <table className="w-full">
-            <thead><tr><th className={th}>Name</th><th className={th}>Role</th><th className={th}>Status</th><th className={th} /></tr></thead>
-            <tbody className="divide-y divide-forest/5">
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td className={td}>{u.name}<div className="text-xs text-muted">{u.email}</div></td>
-                  <td className={td}>{u.role.toLowerCase()}</td>
-                  <td className={td}><Badge tone={u.active ? "good" : "bad"}>{u.active ? "active" : "deactivated"}</Badge></td>
-                  <td className={td}>{u.id !== me.id && <ActionButton url={`/api/admin/users/${u.id}`} method="PATCH" body={{ active: !u.active }} label={u.active ? "Deactivate" : "Reactivate"} variant={u.active ? "danger" : "secondary"} />}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <NewUserForm />
+          <p className="text-sm text-muted">Staff accounts, roles and password resets now live on the Team page.</p>
+          <Link href="/crm/team" className="mt-3 inline-flex rounded-xl bg-forest px-4 py-2 text-sm font-medium text-ivory hover:bg-forest-700">Open Team →</Link>
         </Card>
         <Card title="Recent audit events">
           <ul className="max-h-96 space-y-1 overflow-y-auto text-xs">

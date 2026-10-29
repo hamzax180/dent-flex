@@ -35,6 +35,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
     items: [
       { href: "/crm/treatments", label: "Treatments & prices", icon: "tooth", perm: "treatments:manage" },
       { href: "/crm/content", label: "Website content", icon: "globe", perm: "settings:manage" },
+      { href: "/crm/team", label: "Team", icon: "user", perm: "users:manage" },
       { href: "/crm/reports", label: "Reports", icon: "chart", perm: "reports:read" },
       { href: "/crm/settings", label: "Settings", icon: "cog", perm: "settings:manage" },
     ],
