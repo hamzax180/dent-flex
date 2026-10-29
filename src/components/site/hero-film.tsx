@@ -1,22 +1,26 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { SiteImage } from "./site-image";
+import { IMAGES } from "./site-image";
 
 type Phase = "black" | "name" | "reveal" | "done";
 
 const SEEN_KEY = "df_intro_seen";
+/** The rooms the camera drifts through, in order. */
+const SLIDES = ["treatment-room", "reception", "consultation"] as const;
+const SLIDE_MS = 8000;
 
 /**
- * Hero background "film": black screen → DENT FLEX in white → the clinic slowly lights up.
- * The clinic is a real-time 3D render (lazy-loaded). Plays in full once per session; reduced-motion
- * visitors and devices without WebGL get the finished state immediately.
+ * Hero background "film": black screen → DENT FLEX in white → the clinic slowly comes up out of the dark,
+ * then the camera drifts through the rooms (slow Ken Burns + cross-fades), with a soft sunlight sweep and fine grain.
+ * Plays the title card once per session; reduced-motion visitors get a still photo straight away.
  * Sets <html data-hero="..."> so the hero copy and header can fade in after the intro (see globals.css).
  */
 export function HeroFilm() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<Phase>("black");
-  const [failed, setFailed] = useState(false);
+  const [slide, setSlide] = useState(0);
+  const [still, setStill] = useState(false);
   const timers = useRef<number[]>([]);
 
   useEffect(() => {
@@ -29,57 +33,40 @@ export function HeroFilm() {
     } catch {
       /* storage unavailable: play the full intro */
     }
-    const lowPower = window.innerWidth < 768 || (navigator.hardwareConcurrency ?? 8) <= 4;
-    let scene: { reveal: (ms?: number) => void; dispose: () => void } | null = null;
-    let cancelled = false;
     const at = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(fn, ms));
     const finish = () => {
       setPhase("done");
       root.dataset.hero = "done";
     };
 
+    if (reduced) {
+      setStill(true);
+      finish();
+      return;
+    }
     root.dataset.hero = "playing";
-    // Safety net: never hold the page hostage, even if WebGL or fonts stall.
-    at(9000, finish);
-
-    (async () => {
-      try {
-        await document.fonts?.ready;
-        const { createClinicScene } = await import("./clinic-scene");
-        if (cancelled || !canvasRef.current) return;
-        scene = createClinicScene(canvasRef.current, { lowPower, still: reduced });
-      } catch {
-        setFailed(true);
-      }
-      if (cancelled) return;
-
-      if (reduced) {
-        finish();
-        return;
-      }
-      if (seen) {
-        // Returning in the same session: skip the title card, quick reveal.
-        setPhase("reveal");
-        scene?.reveal(2200);
-        at(700, finish);
-        return;
-      }
+    if (seen) {
+      setPhase("reveal");
+      at(600, finish);
+    } else {
       at(350, () => setPhase("name"));
-      at(3100, () => {
-        setPhase("reveal");
-        scene?.reveal(6500);
-      });
+      at(3100, () => setPhase("reveal"));
       at(4600, finish);
-    })();
-
+    }
     return () => {
-      cancelled = true;
       timers.current.forEach(clearTimeout);
       timers.current = [];
-      scene?.dispose();
       delete root.dataset.hero;
     };
   }, []);
+
+  // Advance the rooms once the clinic is revealed.
+  const lit = phase === "reveal" || phase === "done";
+  useEffect(() => {
+    if (!lit || still) return;
+    const id = window.setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), SLIDE_MS);
+    return () => window.clearInterval(id);
+  }, [lit, still]);
 
   const skip = () => {
     timers.current.forEach(clearTimeout);
@@ -89,23 +76,54 @@ export function HeroFilm() {
   };
 
   const showName = phase === "name";
-  const lit = phase === "reveal" || phase === "done";
 
   return (
     <div className="absolute inset-0 -z-10 overflow-hidden bg-black" aria-hidden={phase === "done" ? undefined : true}>
-      <canvas
-        ref={canvasRef}
-        role="img"
-        aria-label="A calm, sunlit dental treatment room"
-        className={`absolute inset-0 h-full w-full transition-opacity duration-[1800ms] ${failed ? "opacity-0" : "opacity-100"}`}
-      />
-      {failed && <SiteImage name="treatment-room" sizes="100vw" priority className="absolute inset-0" />}
+      {/* The rooms: each one drifts while it's on screen, then cross-fades to the next */}
+      <div className={`absolute inset-0 transition-[opacity,filter] duration-[3200ms] ease-out ${lit ? "opacity-100 brightness-100" : "opacity-0 brightness-[0.25]"}`}>
+        {SLIDES.map((name, i) => {
+          const on = i === slide;
+          return (
+            <div
+              key={name}
+              className={`absolute inset-0 transition-opacity duration-[2600ms] ease-in-out ${on ? "opacity-100" : "opacity-0"}`}
+            >
+              <Image
+                src={IMAGES[name].src}
+                alt={i === 0 ? IMAGES[name].alt : ""}
+                fill
+                sizes="100vw"
+                priority={i === 0}
+                placeholder="blur"
+                quality={90}
+                className={`object-cover ${still ? "" : `df-kb df-kb--${i + 1}`} ${on && !still ? "df-kb--run" : ""}`}
+              />
+            </div>
+          );
+        })}
+      </div>
 
-      {/* Readability wash for the hero copy; fades in with the clinic */}
+      {/* Light: a slow sunbeam sweep, warm bloom and fine film grain */}
+      {!still && <div className={`df-sunbeam pointer-events-none absolute inset-0 transition-opacity duration-[3000ms] ${lit ? "opacity-100" : "opacity-0"}`} />}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_20%,rgba(255,226,170,0.16),transparent_55%)] mix-blend-screen" />
+      <div className="df-grain pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay" />
+
+      {/* Readability wash for the hero copy */}
       <div
-        className={`absolute inset-0 bg-gradient-to-t from-forest/90 via-forest/45 to-forest/20 transition-opacity duration-[2500ms] md:bg-gradient-to-r md:from-forest/85 md:via-forest/35 md:to-transparent ${lit ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-gradient-to-t from-forest/90 via-forest/40 to-forest/10 transition-opacity duration-[2500ms] md:bg-gradient-to-r md:from-[#0f1c16]/90 md:via-forest/45 md:to-transparent ${lit ? "opacity-100" : "opacity-0"}`}
       />
-      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_180px_rgba(0,0,0,0.55)]" />
+      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_220px_rgba(0,0,0,0.6)]" />
+
+      {/* Room progress */}
+      {lit && !still && (
+        <div className="absolute bottom-8 left-1/2 hidden -translate-x-1/2 gap-2 md:flex">
+          {SLIDES.map((name, i) => (
+            <span key={name} className="h-[2px] w-10 overflow-hidden bg-white/20">
+              <span className={`block h-full bg-white/80 ${i === slide ? "df-progress" : i < slide ? "w-full" : "w-0"}`} style={{ animationDuration: `${SLIDE_MS}ms` }} />
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Title card */}
       <div
@@ -134,7 +152,6 @@ export function HeroFilm() {
           Skip intro
         </button>
       )}
-
     </div>
   );
 }
