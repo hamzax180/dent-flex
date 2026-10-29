@@ -1,0 +1,860 @@
+// Dent Flex data model.
+// Conventions: UTC timestamps, money in integer minor units with explicit currency,
+// random UUIDs for primary keys and separate opaque publicIds for public flows.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Staff & auth ─────────────────────────────
+
+enum StaffRole {
+  ADMIN
+  RECEPTIONIST
+  CLINICIAN
+}
+
+model StaffUser {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique // stored lower-cased
+  name         String
+  role         StaffRole
+  passwordHash String
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions       StaffSession[]
+  ownedLeads     Lead[]         @relation("LeadOwner")
+  tasks          Task[]         @relation("TaskOwner")
+  notes          Note[]
+  auditEvents    AuditEvent[]
+  confirmedAppts Appointment[]  @relation("ApptConfirmedBy")
+  clinicianAppts Appointment[]  @relation("ApptClinician")
+}
+
+model StaffSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  tokenHash  String    @unique // sha256 of the cookie token; raw token never stored
+  userId     String    @db.Uuid
+  user       StaffUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String // e.g. "ip:1.2.3.4" or "email:x@y"
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
+// ───────────────────────────── Leads ─────────────────────────────
+
+enum LeadSource {
+  WEB_FORM
+  TEXT_ASSISTANT
+  VOICE_ASSISTANT
+  PHONE
+  WALK_IN
+  REFERRAL
+  CAMPAIGN
+  IMPORT
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  APPOINTMENT_REQUESTED
+  APPOINTMENT_CONFIRMED
+  VISITED
+  TREATMENT_PROPOSED
+  WON
+  LOST
+  NURTURE
+}
+
+enum ContactChannel {
+  EMAIL
+  PHONE
+  WHATSAPP
+  SMS
+}
+
+enum ScoreBand {
+  HOT
+  WARM
+  LOW_INFORMATION
+}
+
+enum NextStepRequest {
+  PRICE_INFO
+  CONSULTATION_DETAILS
+  CALLBACK
+}
+
+model Lead {
+  id                String           @id @default(uuid()) @db.Uuid
+  publicId          String           @unique // random, non-sequential, safe to show
+  fullName          String
+  email             String? // lower-cased
+  phone             String? // normalized E.164-ish
+  language          String           @default("en")
+  treatmentId       String?          @db.Uuid
+  treatment         Treatment?       @relation(fields: [treatmentId], references: [id])
+  treatmentNotSure  Boolean          @default(false)
+  source            LeadSource
+  sourceDetail      String?
+  utmSource         String?
+  utmMedium         String?
+  utmCampaign       String?
+  status            LeadStatus       @default(NEW)
+  ownerId           String?          @db.Uuid
+  owner             StaffUser?       @relation("LeadOwner", fields: [ownerId], references: [id])
+  preferredChannel  ContactChannel?
+  preferredTime     String? // free-form preference, e.g. "weekday mornings"
+  // Scoring facts (non-sensitive, workflow-only)
+  appointmentIntent Boolean          @default(false)
+  bookingTimeframe  String? // self-stated, e.g. "within 2 weeks"
+  answeredFollowUp  Boolean          @default(false)
+  nextStepRequested NextStepRequest?
+  // Current score snapshot (history in LeadScore)
+  scoreTotal        Int              @default(0)
+  scoreBand         ScoreBand        @default(LOW_INFORMATION)
+  scoreOverride     Int?
+  tags              String[]         @default([])
+  humanHold         Boolean          @default(false)
+  firstResponseAt   DateTime? // first meaningful human response
+  lastActivityAt    DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  scores              LeadScore[]
+  consents            ConsentRecord[]
+  conversations       Conversation[]
+  appointmentRequests AppointmentRequest[]
+  appointments        Appointment[]
+  tasks               Task[]
+  notes               Note[]
+  activities          ActivityEvent[]
+  enrollments         WorkflowEnrollment[]
+  deliveries          MessageDelivery[]
+  campaignRecipients  CampaignRecipient[]
+  attributionTouches  AttributionTouch[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([ownerId])
+  @@index([scoreTotal])
+  @@index([email])
+  @@index([phone])
+}
+
+model LeadScore {
+  id             String     @id @default(uuid()) @db.Uuid
+  leadId         String     @db.Uuid
+  lead           Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  version        String // scoring model version
+  total          Int
+  band           ScoreBand
+  factors        Json // [{key, points, max, reason}]
+  calculatedAt   DateTime   @default(now())
+  overrideTotal  Int?
+  overrideReason String?
+  overrideById   String?    @db.Uuid
+
+  @@index([leadId, calculatedAt])
+}
+
+model IdempotencyKey {
+  key         String   @id
+  scope       String
+  requestHash String
+  resultRef   String? // e.g. lead publicId
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model RateLimitHit {
+  id        String   @id @default(uuid()) @db.Uuid
+  bucket    String
+  createdAt DateTime @default(now())
+
+  @@index([bucket, createdAt])
+}
+
+// ───────────────────────────── Consent & suppression ─────────────────────────────
+
+enum ContactPurpose {
+  SERVICE // operational: reply to inquiry, appointment reminders
+  MARKETING // optional, separate opt-in
+}
+
+enum ConsentStatus {
+  GRANTED
+  REVOKED
+}
+
+model ConsentRecord {
+  id            String         @id @default(uuid()) @db.Uuid
+  leadId        String         @db.Uuid
+  lead          Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  channel       ContactChannel
+  purpose       ContactPurpose
+  status        ConsentStatus
+  noticeVersion String
+  source        String // "web_form", "text_assistant", "staff", "unsubscribe_link", ...
+  evidence      String? // pointer/description, never secrets
+  actorId       String?        @db.Uuid
+  grantedAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime       @default(now())
+
+  @@index([leadId, channel, purpose, createdAt])
+}
+
+enum SuppressionScope {
+  GLOBAL
+  EMAIL
+  WHATSAPP
+  SMS
+  PHONE
+}
+
+enum SuppressionReason {
+  UNSUBSCRIBE
+  OPT_OUT
+  BOUNCE
+  COMPLAINT
+  INVALID_DESTINATION
+  MANUAL
+}
+
+model Suppression {
+  id        String            @id @default(uuid()) @db.Uuid
+  scope     SuppressionScope
+  address   String // normalized email/phone; for GLOBAL the lead id
+  reason    SuppressionReason
+  leadId    String?           @db.Uuid
+  note      String?
+  createdAt DateTime          @default(now())
+
+  @@unique([scope, address])
+}
+
+// ───────────────────────────── Conversations ─────────────────────────────
+
+enum ConversationChannel {
+  TEXT
+  VOICE
+}
+
+enum ConversationStatus {
+  OPEN
+  HANDOFF_REQUESTED
+  CLOSED
+}
+
+/**
+ * A named AI sales agent persona. Each has its own personality, voice and chat capacity.
+ * Agents always disclose that they are AI; the persona is a tone of voice, not a fake human.
+ */
+model AiAgent {
+  id            String         @id @default(uuid()) @db.Uuid
+  slug          String         @unique
+  name          String
+  languages     String[]       @default(["en", "tr"])
+  voice         String // OpenAI TTS voice
+  voiceGender   String         @default("female")
+  style         String // how they talk, fed into the prompt
+  tagline       String // shown to visitors, e.g. "Treatment & pricing specialist"
+  hue           Int            @default(140) // avatar colour
+  active        Boolean        @default(true)
+  maxConcurrent Int            @default(3) // live conversations at once (cost/rate control)
+  lastAssignedAt DateTime? // strict rotation: the free agent idle longest gets the next visitor
+  sortOrder     Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+}
+
+model Conversation {
+  id             String              @id @default(uuid()) @db.Uuid
+  publicToken    String              @unique // browser-held handle
+  leadId         String?             @db.Uuid
+  lead           Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  agentId        String?             @db.Uuid
+  agent          AiAgent?            @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  queuedAt       DateTime? // set when the visitor had to wait
+  assignedAt     DateTime?
+  lastActivityAt DateTime            @default(now())
+  messageCount   Int                 @default(0) // counter only; content is not stored unless retention is on
+  channel        ConversationChannel
+  status         ConversationStatus  @default(OPEN)
+  language       String              @default("en")
+  summary        String?
+  handoffReason  String?
+  retentionUntil DateTime?
+  startedAt      DateTime            @default(now())
+  endedAt        DateTime?
+
+  messages MessageEvent[]
+  usage    AiUsageEvent[]
+
+  @@index([leadId])
+  @@index([startedAt])
+  @@index([agentId, status, lastActivityAt])
+  @@index([status, queuedAt])
+}
+
+model MessageEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // user | assistant | tool
+  content        String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+enum AiUsageKind {
+  TEXT
+  VOICE
+}
+
+model AiUsageEvent {
+  id               String        @id @default(uuid()) @db.Uuid
+  kind             AiUsageKind
+  provider         String
+  model            String
+  providerEventId  String?       @unique // dedupe provider-reported usage
+  conversationId   String?       @db.Uuid
+  conversation     Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  inputTokens      Int           @default(0)
+  outputTokens     Int           @default(0)
+  durationSeconds  Int           @default(0)
+  estCostMicroUsd  Int           @default(0) // estimate only, 1e-6 USD
+  createdAt        DateTime      @default(now())
+
+  @@index([createdAt])
+}
+
+// ───────────────────────────── Appointments ─────────────────────────────
+
+enum AppointmentRequestStatus {
+  REQUESTED
+  IN_REVIEW
+  CONFIRMED
+  DECLINED
+  CANCELLED
+}
+
+model AppointmentRequest {
+  id              String                   @id @default(uuid()) @db.Uuid
+  publicId        String                   @unique
+  leadId          String                   @db.Uuid
+  lead            Lead                     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  preferredDate   String? // visitor-stated, not a slot
+  preferredWindow String?
+  notes           String?
+  source          LeadSource
+  status          AppointmentRequestStatus @default(REQUESTED)
+  appointmentId   String?                  @unique @db.Uuid
+  appointment     Appointment?             @relation(fields: [appointmentId], references: [id])
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([status, createdAt])
+}
+
+enum AppointmentStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model Appointment {
+  id            String              @id @default(uuid()) @db.Uuid
+  leadId        String              @db.Uuid
+  lead          Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  startAt       DateTime
+  endAt         DateTime
+  status        AppointmentStatus   @default(CONFIRMED)
+  confirmedById String              @db.Uuid
+  confirmedBy   StaffUser           @relation("ApptConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt   DateTime            @default(now())
+  clinicianId   String?             @db.Uuid
+  clinician     StaffUser?          @relation("ApptClinician", fields: [clinicianId], references: [id])
+  revision      Int                 @default(1) // bumps on reschedule; reminder jobs pin to a revision
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  request       AppointmentRequest?
+
+  @@index([startAt])
+  @@index([clinicianId])
+}
+
+// ───────────────────────────── Treatments & pricing ─────────────────────────────
+
+model Treatment {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique
+  nameEn    String
+  nameTr    String
+  summaryEn String
+  summaryTr String
+  active    Boolean  @default(true)
+  approved  Boolean  @default(false) // content approved by clinic
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  priceVersions    TreatmentPriceVersion[]
+  comparisonPrices ComparisonPrice[]
+  leads            Lead[]
+}
+
+/**
+ * Reference prices for the same treatment in another market (e.g. UK, US, DE), entered by an
+ * admin from a citable source. Used only to show visitors a sourced comparison — never invented.
+ */
+model ComparisonPrice {
+  id          String        @id @default(uuid()) @db.Uuid
+  treatmentId String        @db.Uuid
+  treatment   Treatment     @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+  market      String // ISO country code, e.g. "GB"
+  marketLabel String // e.g. "United Kingdom (private)"
+  currency    String
+  minMinor    Int
+  maxMinor    Int
+  sourceName  String
+  sourceUrl   String?
+  checkedAt   DateTime // when the source was last checked
+  status      ContentStatus @default(DRAFT)
+  createdById String        @db.Uuid
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([treatmentId, market, status])
+}
+
+enum PriceStatus {
+  DRAFT
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+model TreatmentPriceVersion {
+  id            String      @id @default(uuid()) @db.Uuid
+  treatmentId   String      @db.Uuid
+  treatment     Treatment   @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+  version       Int
+  status        PriceStatus @default(DRAFT)
+  currency      String // ISO 4217
+  amountMinor   Int? // single "from" price
+  minMinor      Int?
+  maxMinor      Int?
+  inclusions    String?
+  exclusions    String?
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdById   String      @db.Uuid
+  approvedById  String?     @db.Uuid
+  approvedAt    DateTime?
+  publishedAt   DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@unique([treatmentId, version])
+  @@index([treatmentId, status])
+}
+
+// ───────────────────────────── Work items & history ─────────────────────────────
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+model Task {
+  id          String     @id @default(uuid()) @db.Uuid
+  leadId      String?    @db.Uuid
+  lead        Lead?      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  ownerId     String?    @db.Uuid
+  owner       StaffUser? @relation("TaskOwner", fields: [ownerId], references: [id])
+  title       String
+  description String?
+  dueAt       DateTime
+  status      TaskStatus @default(OPEN)
+  createdById String?    @db.Uuid
+  dedupeKey   String?    @unique // automation-created tasks are idempotent
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([status, dueAt])
+  @@index([ownerId])
+}
+
+model Note {
+  id        String    @id @default(uuid()) @db.Uuid
+  leadId    String    @db.Uuid
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  authorId  String    @db.Uuid
+  author    StaffUser @relation(fields: [authorId], references: [id])
+  body      String
+  createdAt DateTime  @default(now())
+
+  @@index([leadId])
+}
+
+model ActivityEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  leadId    String?  @db.Uuid
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actorId   String?  @db.Uuid // null = system / visitor
+  type      String
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model AuditEvent {
+  id         String     @id @default(uuid()) @db.Uuid
+  actorId    String?    @db.Uuid
+  actor      StaffUser? @relation(fields: [actorId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  data       Json?
+  requestId  String?
+  createdAt  DateTime   @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ───────────────────────────── Clinic content ─────────────────────────────
+
+model ClinicSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Faq {
+  id         String        @id @default(uuid()) @db.Uuid
+  questionEn String
+  answerEn   String
+  questionTr String
+  answerTr   String
+  status     ContentStatus @default(DRAFT)
+  sortOrder  Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model TeamMember {
+  id            String        @id @default(uuid()) @db.Uuid
+  name          String
+  title         String
+  bio           String
+  photoUrl      String?
+  isPlaceholder Boolean       @default(true)
+  status        ContentStatus @default(DRAFT)
+  sortOrder     Int           @default(0)
+}
+
+// ───────────────────────────── Automation engine ─────────────────────────────
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+model Workflow {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String
+  description     String?
+  templateKey     String?          @unique // prebuilt template identity
+  status          WorkflowStatus   @default(DRAFT)
+  draftGraph      Json
+  activeVersionId String?          @db.Uuid
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  versions        WorkflowVersion[]
+}
+
+model WorkflowVersion {
+  id            String               @id @default(uuid()) @db.Uuid
+  workflowId    String               @db.Uuid
+  workflow      Workflow             @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  version       Int
+  graph         Json // immutable once written
+  triggerTypes  String[]
+  publishedById String               @db.Uuid
+  publishedAt   DateTime             @default(now())
+  enrollments   WorkflowEnrollment[]
+
+  @@unique([workflowId, version])
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  STOPPED
+  FAILED
+}
+
+model WorkflowEnrollment {
+  id                String             @id @default(uuid()) @db.Uuid
+  workflowVersionId String             @db.Uuid
+  workflowVersion   WorkflowVersion    @relation(fields: [workflowVersionId], references: [id])
+  workflowId        String             @db.Uuid
+  leadId            String?            @db.Uuid
+  lead              Lead?              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  appointmentId     String?            @db.Uuid
+  triggerEventId    String?            @db.Uuid
+  context           Json? // pinned facts, e.g. appointment revision/startAt
+  status            EnrollmentStatus   @default(ACTIVE)
+  stopReason        String?
+  goalReachedAt     DateTime?
+  dedupeKey         String             @unique // workflow + subject + trigger event
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  steps             WorkflowStepExecution[]
+
+  @@index([workflowId, status])
+  @@index([leadId])
+  @@index([appointmentId])
+}
+
+enum StepStatus {
+  RUNNING
+  WAITING
+  SUCCEEDED
+  SKIPPED
+  FAILED
+}
+
+model WorkflowStepExecution {
+  id           String             @id @default(uuid()) @db.Uuid
+  enrollmentId String             @db.Uuid
+  enrollment   WorkflowEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  nodeId       String
+  nodeType     String
+  status       StepStatus
+  attempts     Int                @default(0)
+  result       Json?
+  error        String?
+  startedAt    DateTime           @default(now())
+  finishedAt   DateTime?
+
+  @@unique([enrollmentId, nodeId]) // graphs are acyclic: each node runs at most once per enrollment
+}
+
+model AutomationEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  type          String
+  leadId        String?   @db.Uuid
+  appointmentId String?   @db.Uuid
+  payload       Json?
+  dedupeKey     String    @unique
+  occurredAt    DateTime  @default(now())
+  processedAt   DateTime?
+
+  @@index([type, occurredAt])
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED // retry scheduled
+  DEAD // exhausted / permanent failure
+  CANCELLED
+}
+
+// Durable queue + transactional outbox. Rows are inserted in the same DB
+// transaction as the business change; the worker claims them with
+// FOR UPDATE SKIP LOCKED and a lease.
+model Job {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String
+  payload     Json
+  runAt       DateTime  @default(now())
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  lockedBy    String?
+  lockedUntil DateTime?
+  lastError   String?
+  dedupeKey   String?   @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAt])
+}
+
+// ───────────────────────────── Messaging & campaigns ─────────────────────────────
+
+enum TemplateStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+model MessageTemplate {
+  id                   String         @id @default(uuid()) @db.Uuid
+  key                  String
+  channel              ContactChannel
+  locale               String
+  version              Int
+  purpose              ContactPurpose
+  status               TemplateStatus @default(DRAFT)
+  subject              String?
+  previewText          String?
+  body                 String // {{firstName}}-style placeholders only
+  providerTemplateName String? // approved WhatsApp template name
+  approvedById         String?        @db.Uuid
+  approvedAt           DateTime?
+  createdAt            DateTime       @default(now())
+
+  @@unique([key, channel, locale, version])
+}
+
+enum CampaignStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  SENDING
+  PAUSED
+  CANCELLED
+  COMPLETED
+}
+
+model Campaign {
+  id           String         @id @default(uuid()) @db.Uuid
+  name         String
+  channel      ContactChannel
+  templateKey  String
+  segment      Json // allowlisted, non-sensitive filters only
+  status       CampaignStatus @default(DRAFT)
+  scheduledAt  DateTime?
+  createdById  String         @db.Uuid
+  approvedById String?        @db.Uuid
+  approvedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  recipients CampaignRecipient[]
+}
+
+enum RecipientStatus {
+  ELIGIBLE
+  EXCLUDED
+  QUEUED
+  SENT
+  BLOCKED // failed pre-send re-check
+  FAILED
+}
+
+model CampaignRecipient {
+  id         String          @id @default(uuid()) @db.Uuid
+  campaignId String          @db.Uuid
+  campaign   Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  leadId     String          @db.Uuid
+  lead       Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  status     RecipientStatus
+  reason     String?
+  deliveryId String?         @db.Uuid
+  createdAt  DateTime        @default(now())
+
+  @@unique([campaignId, leadId])
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  BOUNCED
+  FAILED
+  BLOCKED
+}
+
+model MessageDelivery {
+  id                String         @id @default(uuid()) @db.Uuid
+  leadId            String         @db.Uuid
+  lead              Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  channel           ContactChannel
+  purpose           ContactPurpose
+  templateId        String         @db.Uuid
+  provider          String
+  providerMessageId String?        @unique
+  status            DeliveryStatus @default(QUEUED)
+  failureCode       String?
+  campaignId        String?        @db.Uuid
+  enrollmentId      String?        @db.Uuid
+  dedupeKey         String         @unique
+  repliedAt         DateTime?
+  clickedAt         DateTime?
+  sentAt            DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([campaignId])
+  @@index([leadId, createdAt])
+}
+
+model ProviderEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  provider        String
+  providerEventId String
+  type            String
+  deliveryId      String?  @db.Uuid
+  payload         Json?
+  receivedAt      DateTime @default(now())
+
+  @@unique([provider, providerEventId])
+}
+
+model AttributionTouch {
+  id        String   @id @default(uuid()) @db.Uuid
+  leadId    String   @db.Uuid
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  source    String
+  medium    String?
+  campaign  String?
+  touchedAt DateTime @default(now())
+
+  @@index([leadId, touchedAt])
+}
