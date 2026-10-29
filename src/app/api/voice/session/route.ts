@@ -6,7 +6,11 @@ import { assertWithinBudget } from "@/lib/assistant/usage";
 import { endCall, startCall } from "@/lib/assistant/voice";
 
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), conversationToken: z.string().min(8).max(100), language: z.enum(["en", "tr"]).default("en"), sdp: z.string().min(20).max(20_000) }),
+  z.object({
+    action: z.literal("start"), conversationToken: z.string().min(8).max(100), language: z.enum(["en", "tr"]).default("en"), sdp: z.string().min(20).max(20_000),
+    /** The call terms checkbox on screen; calls cannot start without it. */
+    termsAccepted: z.literal(true, { errorMap: () => ({ message: "Please accept the call terms first." }) }),
+  }),
   z.object({ action: z.literal("end"), conversationToken: z.string().min(8).max(100), seconds: z.number().min(0).max(7200) }),
 ]);
 

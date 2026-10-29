@@ -209,3 +209,15 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
 .df-progress { width: 0; animation-name: df-progress; animation-timing-function: linear; animation-fill-mode: forwards; }
 @keyframes df-progress { to { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { .df-kb, .df-kb--run, .df-sunbeam, .df-grain { animation: none !important; transform: none; } }
+
+/* Request form success tick */
+.df-check { stroke-dasharray: 24; stroke-dashoffset: 24; animation: df-check 0.6s 0.25s ease-out forwards; }
+@keyframes df-check { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .df-check { animation: none; stroke-dashoffset: 0; } }
+
+/* Booking steps */
+.df-step-in { animation: df-step-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.df-step-back { animation: df-step-back 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+@keyframes df-step-in { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes df-step-back { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .df-step-in, .df-step-back { animation: none; } }

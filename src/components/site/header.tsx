@@ -65,7 +65,6 @@ export function SiteHeader({ t, lang, phone }: { t: Dict; lang: Lang; phone: str
             <Logo />
           </Link>
           <div className="ml-auto flex items-center gap-3 pr-4 sm:pr-6">
-            <LangToggle lang={lang} light={!solid} />
             <Link href="/contact" className="hidden bg-sage px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-forest hover:bg-[#cdd3b6] md:inline-block">
               {phone ? `${lang === "tr" ? "Arayın" : "Call us"} ${phone}` : t.nav.contact}
             </Link>
@@ -81,7 +80,13 @@ export function SiteHeader({ t, lang, phone }: { t: Dict; lang: Lang; phone: str
             </button>
             <Link href="/" className="absolute left-1/2 -translate-x-1/2"><Logo /></Link>
           </div>
-          <nav aria-label="Main" className="mx-auto grid max-w-6xl gap-12 px-6 py-16 md:grid-cols-3">
+          <div className="mx-auto max-w-6xl px-6 pt-12">
+            <Link href="/" onClick={() => setOpen(false)} className="group inline-flex items-center gap-3 text-ivory/85 hover:text-sage">
+              <svg viewBox="0 0 24 24" className="size-5" aria-hidden><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinejoin="round" /></svg>
+              <span className="display text-3xl">{lang === "tr" ? "Ana sayfa" : "Home"}</span>
+            </Link>
+          </div>
+          <nav aria-label="Main" className="mx-auto grid max-w-6xl gap-12 px-6 pb-16 pt-10 md:grid-cols-3">
             {t.menu.groups.map(([title, links]) => (
               <div key={title}>
                 <h2 className="display text-4xl text-ivory">{title}</h2>
@@ -95,10 +100,14 @@ export function SiteHeader({ t, lang, phone }: { t: Dict; lang: Lang; phone: str
               </div>
             ))}
           </nav>
-          <div className="mx-auto max-w-6xl px-6 pb-16">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-6 px-6 pb-16">
             <Link href="/contact#request" onClick={() => setOpen(false)} className="inline-flex items-center gap-3 bg-sage px-7 py-3 font-medium text-forest">
               {t.nav.book}
             </Link>
+            <div className="flex items-center gap-3 border border-ivory/20 px-3 py-1.5">
+              <span className="text-[0.7rem] uppercase tracking-[0.16em] text-ivory/50">{lang === "tr" ? "Dil" : "Language"}</span>
+              <LangToggle lang={lang} light />
+            </div>
           </div>
         </div>
       )}

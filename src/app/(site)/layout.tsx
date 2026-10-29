@@ -21,7 +21,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <SiteHeader t={t} lang={lang} phone={clinic.isPlaceholder ? null : clinic.phone} />
       <main id="main">{children}</main>
       <SiteFooter t={t} clinic={clinic} />
-      <MobileCta t={t} assistantName={sales.assistantName} />
+      <MobileCta assistantName={sales.assistantName} team={team} lang={lang} />
       <AssistantWidget t={t} lang={lang} assistantName={sales.assistantName} team={team} callsEnabled={voiceEnabled()} />
       <RevealOnScroll />
     </>

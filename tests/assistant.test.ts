@@ -101,11 +101,16 @@ describe("assistant safety and fallback", () => {
   });
 
   it("voice is unavailable (and falls back) when not enabled — no key is ever returned", async () => {
-    const res = await voiceSession(req("POST", "/api/voice/session", { action: "start", conversationToken: "test-token-123", language: "en", sdp: "v=0 o=- 0 0 IN IP4 127.0.0.1" }), ctx({}));
+    const res = await voiceSession(req("POST", "/api/voice/session", { action: "start", conversationToken: "test-token-123", language: "en", sdp: "v=0 o=- 0 0 IN IP4 127.0.0.1", termsAccepted: true }), ctx({}));
     expect(res.status).toBe(503);
     const body = await res.json();
     expect(JSON.stringify(body)).not.toMatch(/sk-/);
     expect(body.error.message).toMatch(/chat|contact form/);
+  });
+
+  it("refuses to start a call before the call terms are accepted", async () => {
+    const res = await voiceSession(req("POST", "/api/voice/session", { action: "start", conversationToken: "test-token-123", language: "en", sdp: "v=0 o=- 0 0 IN IP4 127.0.0.1" }), ctx({}));
+    expect(res.status).toBe(400);
   });
 
   it("rejects a malformed call request", async () => {

@@ -1,15 +1,15 @@
 import type { Dict } from "@/lib/i18n";
 import type { ClinicInfo } from "@/lib/settings";
-import { SectionHeading } from "./chrome";
 
 export function ContactBlock({ t, clinic }: { t: Dict; clinic: ClinicInfo }) {
   return (
     <div>
-      <SectionHeading eyebrow={t.nav.contact} title={t.contact.title} />
+      <p className="eyebrow text-[11px] text-muted">{t.nav.contact}</p>
+      <h2 className="display mt-2 text-3xl text-forest">{t.contact.title}</h2>
       {clinic.isPlaceholder && (
         <p className="mt-4 bg-gold/15 px-4 py-3 text-sm text-ink">{t.contact.placeholder}</p>
       )}
-      <dl className="mt-8 space-y-6">
+      <dl className="mt-6 space-y-5">
         <div>
           <dt className="text-xs uppercase tracking-[0.18em] text-muted">{t.contact.address}</dt>
           <dd className="mt-1 text-ink">

@@ -190,7 +190,7 @@ export function useCall({ lang, getToken, getConsent, onCard }: { lang: Lang; ge
         fetch("/api/voice/session", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "start", conversationToken: token, language: lang, sdp: offer.sdp }),
+          body: JSON.stringify({ action: "start", conversationToken: token, language: lang, sdp: offer.sdp, termsAccepted: getConsent() }),
         }),
         new Promise((r) => setTimeout(r, 1800)), // let it ring a moment
       ]);
@@ -208,7 +208,7 @@ export function useCall({ lang, getToken, getConsent, onCard }: { lang: Lang; ge
       );
       setState("failed");
     }
-  }, [getToken, hangUp, lang, onEvent, teardown, tr]);
+  }, [getConsent, getToken, hangUp, lang, onEvent, teardown, tr]);
 
   /** Tell the agent about something that happened on screen (e.g. a photo was shared). */
   const notify = useCallback((text: string) => {

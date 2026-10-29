@@ -166,12 +166,19 @@ function Cards({ cards, lang }: { cards: AssistantCard[]; lang: Lang }) {
   );
 }
 
-function ConsentRow({ consent, setConsent, lang, t }: { consent: boolean; setConsent: (v: boolean) => void; lang: Lang; t: Dict }) {
+function ConsentRow({ consent, setConsent, lang, t, call = false, name = "" }: { consent: boolean; setConsent: (v: boolean) => void; lang: Lang; t: Dict; call?: boolean; name?: string }) {
+  const tr = lang === "tr";
   return (
-    <label className={`flex items-start gap-2 border-t border-forest/10 px-4 py-2 text-[11px] leading-snug transition-colors ${consent ? "bg-sage/25 text-forest" : "bg-white text-muted"}`}>
+    <label className={`flex items-start gap-2 border-t border-forest/10 px-4 py-2 text-[11px] leading-snug transition-colors ${consent ? "bg-sage/25 text-forest" : call ? "bg-[#fff8ec] text-ink" : "bg-white text-muted"}`}>
       <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 accent-forest" />
       <span>
-        {lang === "tr" ? "Paylaştığım iletişim bilgileriyle Dent Flex'in bana ulaşmasını kabul ediyorum." : "I agree Dent Flex may contact me using the details I share here."}{" "}
+        {call
+          ? tr
+            ? `Aramak için kabul edin: ${name} yapay zekâ destekli bir danışmandır, görüşme yazıya dökülür ama kaydedilmez ve Dent Flex bana paylaştığım bilgilerle ulaşabilir.`
+            : `To call, please agree: ${name} is an AI-powered coordinator, the call is transcribed but never recorded, and Dent Flex may contact me using the details I share.`
+          : tr
+            ? "Paylaştığım iletişim bilgileriyle Dent Flex'in bana ulaşmasını kabul ediyorum."
+            : "I agree Dent Flex may contact me using the details I share here."}{" "}
         <Link href="/privacy" target="_blank" className="underline">{t.footer.privacy}</Link>
       </span>
     </label>
@@ -447,7 +454,7 @@ export function AssistantWidget({ t, lang, assistantName, team = [], callsEnable
   const startVoice = () => {
     setTab("voice");
     if (callsEnabled) {
-      if (call.state !== "ringing" && call.state !== "connected") void call.call();
+      if (consent && call.state !== "ringing" && call.state !== "connected") void call.call();
     } else if (!voice.active) void voice.start(opener);
   };
 
@@ -954,7 +961,13 @@ function CallPane({
           </>
         ) : (
           <>
-            <button type="button" onClick={() => void call.call()} className="flex items-center gap-3 rounded-full bg-[#3f9b5f] py-3.5 pl-4 pr-6 text-white shadow-lg transition hover:bg-[#368752]">
+            <button
+              type="button"
+              onClick={() => consent && void call.call()}
+              disabled={!consent}
+              title={consent ? undefined : tr ? "Önce aşağıdaki kutuyu işaretleyin" : "Tick the box below first"}
+              className="flex items-center gap-3 rounded-full bg-[#3f9b5f] py-3.5 pl-4 pr-6 text-white shadow-lg transition hover:bg-[#368752] disabled:cursor-not-allowed disabled:bg-[#9db8a4] disabled:shadow-none"
+            >
               <span className="flex size-10 items-center justify-center rounded-full bg-white/20"><PhoneIcon /></span>
               <span className="text-base font-medium">{call.state === "ended" ? (tr ? "Tekrar ara" : "Call again") : tr ? `${name}'i ara` : `Call ${name}`}</span>
             </button>
@@ -967,7 +980,7 @@ function CallPane({
       <p className="px-6 pb-2 text-center text-[10px] leading-snug text-muted">
         {t.assistant.disclosure} {tr ? "Görüşmeler en fazla 5 dakikadır; ses kaydı saklanmaz." : "Calls last up to 5 minutes; audio is never recorded."}
       </p>
-      <ConsentRow consent={consent} setConsent={setConsent} lang={lang} t={t} />
+      <ConsentRow consent={consent} setConsent={setConsent} lang={lang} t={t} call name={name} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Dict } from "@/lib/i18n";
+import type { Dict, Lang } from "@/lib/i18n";
 import type { ClinicInfo } from "@/lib/settings";
 import { AskButton } from "./ask-button";
 
@@ -111,16 +111,13 @@ export function SiteFooter({ t, clinic }: { t: Dict; clinic: ClinicInfo }) {
 }
 
 /**
- * Mobile bottom bar: booking CTA + the AI coordinator in one place, so nothing floats over content.
+ * Mobile bottom bar: one full-width button to the AI coordinators (who book the appointment).
  * Respects the iPhone home-indicator safe area. The footer has matching bottom padding.
  */
-export function MobileCta({ t, assistantName }: { t: Dict; assistantName: string }) {
+export function MobileCta({ assistantName, team, lang }: { assistantName: string; team: { name: string; hue: number }[]; lang: Lang }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-forest/10 bg-white/95 px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
-      <Link href="/contact#request" className="flex flex-1 items-center justify-center gap-2.5 bg-sage py-3 text-sm font-medium text-forest">
-        {t.nav.book} <Arrow />
-      </Link>
-      <AskButton name={assistantName} />
+    <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-ivory via-ivory/90 to-transparent px-3 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden">
+      <AskButton name={assistantName} team={team} lang={lang} />
     </div>
   );
 }
