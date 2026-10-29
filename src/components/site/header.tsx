@@ -8,8 +8,8 @@ import { Logo } from "./chrome";
 import { LangToggle } from "./lang-toggle";
 
 /**
- * Transparent over the home hero, solid white once scrolled (and always on inner pages).
- * Left: menu square + request button. Centre: logo. Right: language + contact button.
+ * The bar scrolls away with the page (transparent over the home hero, white on inner pages);
+ * only the square menu button stays pinned top-left. Centre: logo. Right: contact button.
  */
 export function SiteHeader({ t, lang, phone }: { t: Dict; lang: Lang; phone: string | null }) {
   const path = usePathname();
@@ -40,27 +40,16 @@ export function SiteHeader({ t, lang, phone }: { t: Dict; lang: Lang; phone: str
     };
   }, [open]);
 
-  const solid = !overHero || scrolled;
+  const solid = !overHero;
   return (
     <>
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-24 focus:top-3 focus:z-[60] focus:bg-forest focus:px-3 focus:py-2 focus:text-ivory">Skip to content</a>
       <header
-        className={`site-header ${overHero ? "over-hero fixed" : "sticky"} inset-x-0 top-0 z-40 transition-colors duration-300 ${solid ? "bg-white text-forest shadow-[0_1px_0_rgba(31,51,41,0.08)]" : "bg-transparent text-ivory"}`}
+        className={`site-header ${overHero ? "over-hero absolute" : "relative"} inset-x-0 top-0 z-40 ${solid ? "bg-white text-forest shadow-[0_1px_0_rgba(31,51,41,0.08)]" : "bg-transparent text-ivory"}`}
       >
         <div className="relative flex h-[72px] items-center sm:h-[88px]">
-          <button
-            ref={menuBtnRef}
-            onClick={() => setOpen(true)}
-            aria-expanded={open}
-            aria-controls="site-menu"
-            aria-label={t.menu.open}
-            className="flex h-full w-[72px] shrink-0 items-center justify-center bg-sage text-forest transition-colors hover:bg-[#cdd3b6] sm:w-[88px]"
-          >
-            <svg width="26" height="18" viewBox="0 0 26 18" aria-hidden><path d="M0 1h26M0 9h26M0 17h26" stroke="currentColor" strokeWidth="1.6" /></svg>
-          </button>
-          <Link href="/contact#request" className="ml-6 hidden bg-sage px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-forest hover:bg-[#cdd3b6] lg:inline-block">
-            {t.nav.book}
-          </Link>
+          {/* Space for the pinned menu button */}
+          <span className="h-full w-[72px] shrink-0 sm:w-[88px]" aria-hidden />
           <Link href="/" aria-label="Dent Flex home" className="absolute left-1/2 -translate-x-1/2">
             <Logo />
           </Link>
@@ -71,6 +60,18 @@ export function SiteHeader({ t, lang, phone }: { t: Dict; lang: Lang; phone: str
           </div>
         </div>
       </header>
+
+      {/* The only thing that stays on screen while scrolling */}
+      <button
+        ref={menuBtnRef}
+        onClick={() => setOpen(true)}
+        aria-expanded={open}
+        aria-controls="site-menu"
+        aria-label={t.menu.open}
+        className={`site-menu-btn ${overHero ? "over-hero" : ""} fixed left-0 top-0 z-40 flex size-[72px] items-center justify-center bg-sage text-forest transition-[background-color,box-shadow] hover:bg-[#cdd3b6] sm:size-[88px] ${scrolled ? "shadow-[0_10px_30px_-10px_rgba(20,35,28,0.45)]" : ""}`}
+      >
+        <svg width="26" height="18" viewBox="0 0 26 18" aria-hidden><path d="M0 1h26M0 9h26M0 17h26" stroke="currentColor" strokeWidth="1.6" /></svg>
+      </button>
 
       {open && (
         <div id="site-menu" role="dialog" aria-modal="true" aria-label="Menu" className="fixed inset-0 z-50 overflow-y-auto bg-forest text-ivory">
