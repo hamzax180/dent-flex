@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import { recordSignal } from "../interest";
 import { ApiError } from "../errors";
 import { getSetting } from "../settings";
 import { systemPrompt } from "./assistant";
@@ -80,6 +81,7 @@ export async function startCall(conversationToken: string, language: "en" | "tr"
     throw new ApiError("UNAVAILABLE", "The call couldn't connect. Please try again or use chat.");
   }
   await prisma.conversation.update({ where: { id: conv.id }, data: { channel: "VOICE", lastActivityAt: new Date() } });
+  await recordSignal(conv.id, "voice_call");
   return { answerSdp: await res.text(), maxSeconds: maxCallSeconds() };
 }
 
@@ -94,4 +96,5 @@ export async function endCall(conversationToken: string, seconds: number) {
     }),
     prisma.conversation.update({ where: { id: conv.id }, data: { lastActivityAt: new Date(), messageCount: { increment: 1 } } }),
   ]);
+  if (s >= 120) await recordSignal(conv.id, "voice_call_long");
 }

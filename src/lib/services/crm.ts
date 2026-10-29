@@ -272,3 +272,52 @@ export async function overview(staff: Staff, from: Date, to: Date) {
   ]);
   return { newLeads, hot, requested, confirmed, overdue, byStatus: Object.fromEntries(byStatus.map((b) => [b.status, b._count])) as Partial<Record<LeadStatus, number>>, upcoming };
 }
+
+/** Extra dashboard panels: who to call now, today's work, what just happened, where leads come from. */
+export async function dashboard(staff: Staff, from: Date, to: Date) {
+  const scope = leadScope(staff);
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart.getTime() + 86400_000);
+  const trendFrom = new Date(dayStart.getTime() - 13 * 86400_000);
+  const [hotLeads, tasks, todayAppts, activity, sources, recent] = await Promise.all([
+    prisma.lead.findMany({
+      where: { AND: [scope, { status: { notIn: ["WON", "LOST"] } }] },
+      orderBy: [{ scoreTotal: "desc" }, { createdAt: "desc" }],
+      take: 6,
+      select: { id: true, fullName: true, status: true, scoreTotal: true, scoreBand: true, scoreOverride: true, createdAt: true, source: true, treatment: { select: { nameEn: true } } },
+    }),
+    prisma.task.findMany({
+      where: { status: "OPEN", dueAt: { lt: dayEnd }, ...(staff.role === "CLINICIAN" ? { ownerId: staff.id } : {}) },
+      orderBy: { dueAt: "asc" },
+      take: 6,
+      include: { lead: { select: { id: true, fullName: true } } },
+    }),
+    prisma.appointment.findMany({
+      where: { status: "CONFIRMED", startAt: { gte: dayStart, lt: dayEnd }, lead: scope },
+      orderBy: { startAt: "asc" },
+      include: { lead: { select: { id: true, fullName: true } } },
+    }),
+    prisma.activityEvent.findMany({
+      where: { lead: scope },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      include: { lead: { select: { id: true, fullName: true } } },
+    }),
+    prisma.lead.groupBy({ by: ["source"], where: { AND: [scope, { createdAt: { gte: from, lt: to } }] }, _count: true }),
+    prisma.lead.findMany({ where: { AND: [scope, { createdAt: { gte: trendFrom } }] }, select: { createdAt: true } }),
+  ]);
+  const trend = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(trendFrom.getTime() + i * 86400_000);
+    const next = d.getTime() + 86400_000;
+    return { day: d, count: recent.filter((r) => r.createdAt.getTime() >= d.getTime() && r.createdAt.getTime() < next).length };
+  });
+  return {
+    hotLeads,
+    tasks,
+    todayAppts,
+    activity,
+    sources: sources.map((s) => ({ source: s.source, count: s._count })).sort((a, b) => b.count - a.count),
+    trend,
+  };
+}

@@ -1,3 +1,4 @@
+import { refreshLeadInterest } from "../interest";
 import { Prisma, type Lead, type LeadSource, type LeadStatus, type ContactChannel } from "@prisma/client";
 import { prisma, type Tx } from "../db";
 import { ApiError } from "../errors";
@@ -152,6 +153,7 @@ export async function createLead(raw: LeadInput | unknown, opts: CreateLeadOptio
 
       if (opts.conversationId) {
         await tx.conversation.update({ where: { id: opts.conversationId }, data: { leadId: lead.id } });
+        await refreshLeadInterest(tx, lead.id);
       }
 
       // Notice + permissions. Service contact = replying to this inquiry on the channels given.

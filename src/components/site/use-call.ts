@@ -210,6 +210,13 @@ export function useCall({ lang, getToken, getConsent, onCard }: { lang: Lang; ge
     }
   }, [getToken, hangUp, lang, onEvent, teardown, tr]);
 
+  /** Tell the agent about something that happened on screen (e.g. a photo was shared). */
+  const notify = useCallback((text: string) => {
+    if (dc.current?.readyState !== "open") return;
+    dc.current.send(JSON.stringify({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } }));
+    dc.current.send(JSON.stringify({ type: "response.create" }));
+  }, []);
+
   const toggleMute = useCallback(() => {
     const track = mic.current?.getAudioTracks()[0];
     if (!track) return;
@@ -225,7 +232,7 @@ export function useCall({ lang, getToken, getConsent, onCard }: { lang: Lang; ge
   }, [state, hangUp]);
 
   return useMemo(
-    () => ({ state, speaking, muted, seconds, captions, partial, error, call, hangUp, toggleMute, maxSeconds: maxSeconds.current }),
-    [state, speaking, muted, seconds, captions, partial, error, call, hangUp, toggleMute],
+    () => ({ state, speaking, muted, seconds, captions, partial, error, call, hangUp, toggleMute, notify, maxSeconds: maxSeconds.current }),
+    [state, speaking, muted, seconds, captions, partial, error, call, hangUp, toggleMute, notify],
   );
 }

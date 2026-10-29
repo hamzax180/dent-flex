@@ -132,6 +132,8 @@ model Lead {
   nextStepRequested NextStepRequest?
   // Current score snapshot (history in LeadScore)
   scoreTotal        Int              @default(0)
+  /// Engagement across the lead's conversations (uploads, calls, chat depth…), 0-100
+  interestScore     Int              @default(0)
   scoreBand         ScoreBand        @default(LOW_INFORMATION)
   scoreOverride     Int?
   tags              String[]         @default([])
@@ -313,6 +315,10 @@ model Conversation {
 
   messages MessageEvent[]
   usage    AiUsageEvent[]
+  uploads  Upload[]
+  signals  EngagementSignal[]
+  /// Engagement (interest) score 0-100 from behaviour signals; see src/lib/interest.ts
+  interestScore Int @default(0)
 
   @@index([leadId])
   @@index([startedAt])
@@ -857,4 +863,41 @@ model AttributionTouch {
   touchedAt DateTime @default(now())
 
   @@index([leadId, touchedAt])
+}
+
+enum UploadKind {
+  XRAY
+  SMILE_PHOTO
+  OTHER
+}
+
+/// Optional files a visitor shares in chat or on a call (X-ray, smile photo). Health data:
+/// stored only with explicit consent, never sent to the AI model, staff-only access.
+model Upload {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  kind           UploadKind
+  treatmentSlug  String?
+  fileName       String
+  mime           String
+  sizeBytes      Int
+  sha256         String
+  data           Bytes
+  consentAt      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+/// One row per behaviour signal per conversation (deduplicated), e.g. "uploaded_xray".
+model EngagementSignal {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  type           String
+  points         Int
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, type])
 }

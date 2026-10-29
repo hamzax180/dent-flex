@@ -6,10 +6,11 @@ import type { Dict, Lang } from "@/lib/i18n";
 import type { AssistantCard } from "@/lib/assistant/assistant";
 import { useVoice, type VoiceReply, type VoiceState } from "./use-voice";
 import { useCall } from "./use-call";
+import { UploadSheet, type SharedFile } from "./upload-sheet";
 import type { PublicAgent } from "@/lib/assistant/agents";
 
 type DeliveryStatus = "sent" | "delivered" | "seen";
-type Msg = { id: number; role: "user" | "assistant"; text: string; cards?: AssistantCard[]; at: number; status?: DeliveryStatus };
+type Msg = { id: number; role: "user" | "assistant"; text: string; cards?: AssistantCard[]; at: number; status?: DeliveryStatus; attachment?: SharedFile };
 let msgSeq = 0;
 const nextId = () => ++msgSeq;
 
@@ -264,12 +265,12 @@ export function AssistantWidget({ t, lang, assistantName, team = [], callsEnable
 
   /** Sends a message; resolves with the reply (and its signed speech ticket) so voice mode can speak it. */
   const ask = useCallback(
-    async (message: string, via: "text" | "voice"): Promise<VoiceReply> => {
+    async (message: string, via: "text" | "voice", attachment?: SharedFile): Promise<VoiceReply> => {
       const history = msgsRef.current.slice(-10).map((m) => ({ role: m.role, text: m.text.slice(0, 2000) }));
       const id = nextId();
       const instant = via === "voice" || reducedRef.current;
       const setStatus = (status: DeliveryStatus) => setMsgs((all) => all.map((x) => (x.id === id ? { ...x, status } : x)));
-      setMsgs((m) => [...m, { id, role: "user", text: message, at: Date.now(), status: "sent" }]);
+      setMsgs((m) => [...m, { id, role: "user", text: message, at: Date.now(), status: "sent", attachment }]);
       setBusy(true);
       const sentAt = performance.now();
       // Delivered almost at once; "seen" after a short, natural reading pause; then typing starts.
@@ -328,6 +329,7 @@ export function AssistantWidget({ t, lang, assistantName, team = [], callsEnable
     [lang, tr],
   );
 
+  const [sheet, setSheet] = useState(false);
   const voice = useVoice({ lang, onUtterance: (said) => ask(said, "voice"), getToken: () => tokenRef.current });
   // Phone-style call (OpenAI Realtime). Cards the agent quotes during the call land in the chat too.
   const call = useCall({
@@ -645,6 +647,7 @@ export function AssistantWidget({ t, lang, assistantName, team = [], callsEnable
                     )}
                     {msgs.map((m, i) => (
                       <div key={m.id ?? i} className={`df-rise ${m.role === "user" ? "flex flex-col items-end" : "sm:pl-10"}`}>
+                        {m.attachment && <AttachmentChip file={m.attachment} />}
                         <p className={`max-w-[85%] whitespace-pre-wrap px-5 py-3.5 text-[15px] leading-relaxed ${m.role === "user" ? "bg-forest text-ivory" : "bg-white text-ink shadow-sm"}`}>{m.text}</p>
                         {m.cards && m.cards.length > 0 && <div className="max-w-xl"><Cards cards={m.cards} lang={lang} /></div>}
                         <span className="mt-1 flex items-center gap-1 px-1 text-[10px] text-muted">
@@ -682,6 +685,16 @@ export function AssistantWidget({ t, lang, assistantName, team = [], callsEnable
                   )}
                   <ConsentRow consent={consent} setConsent={setConsent} lang={lang} t={t} />
                   <form method="post" onSubmit={send} className="flex gap-2 border-t border-forest/10 bg-white p-3 sm:px-8 sm:py-4">
+                    <button
+                      type="button"
+                      onClick={() => setSheet(true)}
+                      disabled={!ready}
+                      className="flex w-12 shrink-0 items-center justify-center border border-forest/15 bg-ivory/50 text-forest transition hover:border-forest hover:bg-white disabled:opacity-40"
+                      aria-label={tr ? "Röntgen veya gülüş fotoğrafı paylaş" : "Share an X-ray or smile photo"}
+                      title={tr ? "Röntgen veya gülüş fotoğrafı paylaş" : "Share an X-ray or smile photo"}
+                    >
+                      <svg viewBox="0 0 24 24" className="size-5" aria-hidden><path d="M20.5 11.5 12 20a5.5 5.5 0 0 1-7.8-7.8l8.9-8.9a3.7 3.7 0 0 1 5.2 5.2l-8.9 8.9a1.8 1.8 0 0 1-2.6-2.6l8.2-8.2" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
                     <label htmlFor="df-assistant-input" className="sr-only">{t.assistant.placeholder}</label>
                     <input
                       id="df-assistant-input"
@@ -699,16 +712,51 @@ export function AssistantWidget({ t, lang, assistantName, team = [], callsEnable
                 </>
               ) : (
                 callsEnabled ? (
-                  <CallPane call={call} lang={lang} name={name} agent={agent} lastAssistant={lastAssistant} consent={consent} setConsent={setConsent} t={t} onBack={() => setTab("chat")} />
+                  <CallPane call={call} lang={lang} name={name} agent={agent} lastAssistant={lastAssistant} consent={consent} setConsent={setConsent} t={t} onBack={() => setTab("chat")} onShare={() => setSheet(true)} />
                 ) : (
                   <VoicePane voice={voice} lang={lang} t={t} name={name} opener={opener} lastUser={lastUser?.text} lastAssistant={lastAssistant} consent={consent} setConsent={setConsent} busy={busy} />
                 )
               )}
             </div>
+            <UploadSheet
+              open={sheet}
+              onClose={() => setSheet(false)}
+              lang={lang}
+              getToken={() => tokenRef.current}
+              onDone={(f) => {
+                const what = `${f.kindLabel.toLowerCase()}${f.treatment ? ` (${f.treatment})` : ""}`;
+                if (tab === "voice" && call.state === "connected") {
+                  setMsgs((m) => [...m, { id: nextId(), role: "user", text: tr ? `${f.kindLabel} paylaştım.` : `I shared my ${what}.`, at: Date.now(), attachment: f }]);
+                  call.notify(`[On screen: the caller just uploaded their ${what}. You cannot see it. Thank them warmly, say the dental team will review it before their consultation, and move towards booking.]`);
+                } else {
+                  void ask(tr ? `${f.kindLabel} paylaştım${f.treatment ? ` (${f.treatment})` : ""}.` : `I've just shared my ${what}.`, "text", f);
+                }
+              }}
+            />
           </section>
         </div>
       )}
     </>
+  );
+}
+
+/** Thumbnail shown above a message that carried a shared file. */
+function AttachmentChip({ file }: { file: SharedFile }) {
+  return (
+    <span className="df-rise mb-1.5 flex max-w-[85%] items-center gap-3 border border-forest/15 bg-white p-2 pr-4 shadow-sm">
+      {file.preview ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={file.preview} alt="" className="size-14 object-cover" />
+      ) : (
+        <span className="flex size-14 items-center justify-center bg-sage-50 text-forest">
+          <svg viewBox="0 0 24 24" className="size-6" aria-hidden><path d="M4 5h16v14H4zM8 9v6M12 8v8M16 9v6" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" /></svg>
+        </span>
+      )}
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-forest">{file.kindLabel}</span>
+        <span className="block truncate text-xs text-muted">{file.treatment ?? "—"} · 🔒</span>
+      </span>
+    </span>
   );
 }
 
@@ -820,9 +868,9 @@ function CallTranscript({ call, name, hue, tr, children }: { call: ReturnType<ty
 
 /** Phone-style call screen (OpenAI Realtime speech-to-speech). */
 function CallPane({
-  call, lang, name, agent, lastAssistant, consent, setConsent, t, onBack,
+  call, lang, name, agent, lastAssistant, consent, setConsent, t, onBack, onShare,
 }: {
-  call: ReturnType<typeof useCall>; lang: Lang; name: string; agent: PublicAgent | null; lastAssistant?: Msg; consent: boolean; setConsent: (v: boolean) => void; t: Dict; onBack: () => void;
+  call: ReturnType<typeof useCall>; lang: Lang; name: string; agent: PublicAgent | null; lastAssistant?: Msg; consent: boolean; setConsent: (v: boolean) => void; t: Dict; onBack: () => void; onShare: () => void;
 }) {
   const tr = lang === "tr";
   const live = call.state === "connected";
@@ -889,6 +937,16 @@ function CallPane({
               aria-label={call.muted ? (tr ? "Sesi aç" : "Unmute") : (tr ? "Sessize al" : "Mute")}
             >
               <svg viewBox="0 0 24 24" className="size-6" aria-hidden><rect x="9" y="3" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="1.7" fill="none" /><path d="M5 11a7 7 0 0014 0M12 18v3" stroke="currentColor" strokeWidth="1.7" fill="none" />{call.muted && <path d="M4 4l16 16" stroke="currentColor" strokeWidth="1.7" />}</svg>
+            </button>
+            <button
+              type="button"
+              onClick={onShare}
+              disabled={!live}
+              className="flex size-14 items-center justify-center rounded-full border border-forest/20 bg-white text-forest transition hover:border-forest disabled:opacity-40"
+              aria-label={tr ? "Fotoğraf paylaş" : "Share a photo"}
+              title={tr ? "Röntgen veya gülüş fotoğrafı paylaş" : "Share an X-ray or smile photo"}
+            >
+              <svg viewBox="0 0 24 24" className="size-5" aria-hidden><path d="M20.5 11.5 12 20a5.5 5.5 0 0 1-7.8-7.8l8.9-8.9a3.7 3.7 0 0 1 5.2 5.2l-8.9 8.9a1.8 1.8 0 0 1-2.6-2.6l8.2-8.2" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
             <button type="button" onClick={call.hangUp} className="flex size-16 items-center justify-center rounded-full bg-[#d64545] text-white shadow-lg transition hover:bg-[#c03a3a]" aria-label={tr ? "Görüşmeyi bitir" : "Hang up"}>
               <PhoneIcon down />

@@ -1,3 +1,4 @@
+import { recordSignal, type SignalType } from "../interest";
 import { z } from "zod";
 import { prisma } from "../db";
 import { sha256 } from "../ids";
@@ -61,7 +62,21 @@ function words(s: string) {
   return s.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length > 2);
 }
 
+/** Runs a tool, then records the engagement signal it implies (if it succeeded). */
 export async function executeTool(name: string, rawArgs: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
+  const result = await runTool(name, rawArgs, ctx);
+  if (!result.error) {
+    const signals: SignalType[] =
+      name === "getPriceComparison" ? ["viewed_prices"]
+      : name === "createAppointmentRequest" && result.ok ? ["requested_appointment", "shared_contact"]
+      : name === "createLead" && result.ok ? ["shared_contact"]
+      : [];
+    if (signals.length) await recordSignal(ctx.conversationId, ...signals).catch(() => undefined);
+  }
+  return result;
+}
+
+async function runTool(name: string, rawArgs: unknown, ctx: ToolContext): Promise<Record<string, unknown>> {
   if (!(name in TOOL_SCHEMAS)) return { error: "unknown_tool" };
   const parsed = TOOL_SCHEMAS[name as ToolName].safeParse(rawArgs ?? {});
   if (!parsed.success) return { error: "invalid_arguments", details: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) };

@@ -1,3 +1,4 @@
+import { recordSignal, type SignalType } from "../interest";
 import type OpenAI from "openai";
 import { z } from "zod";
 import { prisma } from "../db";
@@ -76,6 +77,8 @@ YOUR SALES FLOW:
 5. Lower the risk to make yes easy: it's only a request, nothing to pay now, the team just calls to talk it through, and they can change their mind any time.
 6. A "no" or "maybe later" is not the end: ask one curious question about what's holding them back, handle it, and offer the call again. After two gentle tries, respect it and leave the door open ("whenever you're ready, I'm here").
 
+OPTIONAL PHOTOS: visitors can share an X-ray or a smile photo with the paperclip button (on calls, the "share photo" button). When it fits (implants, veneers, orthodontics, smile makeover, whitening), invite them once, lightly: it helps the dental team prepare for their call. It is never required and you never ask twice. You cannot see images: never describe, judge or diagnose them, just thank them and say the team will review it.
+
 SMART PERSUASION, NEVER TRICKS: use their own reasons, real sourced numbers and genuine reassurance. Never invent urgency, scarcity, discounts, deadlines, reviews or results, and never pressure anyone who's said a clear no.
 
 HONESTY (non-negotiable, keep it light):
@@ -137,7 +140,9 @@ export async function handleAssistantMessage(raw: unknown): Promise<AssistantRep
     agent = state.agent;
   }
   const persona: Persona = { name: agent?.name ?? profile.assistantName, style: agent?.style };
-  await prisma.conversation.update({ where: { id: conv.id }, data: { messageCount: { increment: 2 }, lastActivityAt: new Date() } });
+  const counted = await prisma.conversation.update({ where: { id: conv.id }, data: { messageCount: { increment: 2 }, lastActivityAt: new Date() }, select: { messageCount: true } });
+  const depth: SignalType[] = [...(counted.messageCount >= 6 ? (["chat_engaged"] as const) : []), ...(counted.messageCount >= 14 ? (["chat_deep"] as const) : [])];
+  if (depth.length) await recordSignal(conv.id, ...depth);
   const ctx: ToolContext = {
     conversationId: conv.id, language: input.language, contactConsent: input.contactConsent,
     channel: input.mode === "voice" ? "VOICE_ASSISTANT" : "TEXT_ASSISTANT",

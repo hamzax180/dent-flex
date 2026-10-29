@@ -168,3 +168,19 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .df-bubble { animation: none; }
 }
+
+/* CRM */
+.crm-main { animation: crm-in 0.35s ease-out both; }
+@keyframes crm-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.crm-pop { animation: crm-pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes crm-pop { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
+.crm-drawer { animation: crm-drawer 0.22s ease-out both; }
+@keyframes crm-drawer { from { transform: translateX(-100%); } to { transform: none; } }
+.crm table { border-collapse: separate; border-spacing: 0; }
+.crm tbody tr { transition: background-color 0.15s; }
+.crm tbody tr:hover { background: #fafaf6; }
+@media (prefers-reduced-motion: reduce) { .crm-main, .crm-pop, .crm-drawer { animation: none; } }
+
+.df-sheet { animation: df-sheet 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.05) both; }
+@keyframes df-sheet { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .df-sheet { animation: none; } }
