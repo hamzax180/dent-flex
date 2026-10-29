@@ -8,8 +8,8 @@ import { AGENT_SEED } from "../src/lib/assistant/agents";
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? "admin@dentflex.local").toLowerCase();
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe-Demo-Only-123";
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL?.trim() || "admin@dentflex.local").toLowerCase();
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD?.trim() || "ChangeMe-Demo-Only-123";
   const hash = await bcrypt.hash(adminPassword, 12);
 
   const admin = await prisma.staffUser.upsert({

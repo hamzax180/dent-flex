@@ -1,3 +1,4 @@
+import { secret } from "../env";
 import { prisma } from "../db";
 import { recordSignal } from "../interest";
 import { ApiError } from "../errors";
@@ -25,7 +26,7 @@ export function realtimeVoice(v?: string | null) {
 }
 
 export function voiceEnabled() {
-  return process.env.VOICE_ENABLED === "true" && Boolean(process.env.OPENAI_API_KEY);
+  return process.env.VOICE_ENABLED === "true" && Boolean(secret("OPENAI_API_KEY"));
 }
 
 export const maxCallSeconds = () => Number(process.env.VOICE_MAX_SESSION_SECONDS ?? 300);
@@ -71,7 +72,7 @@ export async function startCall(conversationToken: string, language: "en" | "tr"
   form.set("session", JSON.stringify(session));
   const res = await fetch("https://api.openai.com/v1/realtime/calls", {
     method: "POST",
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    headers: { Authorization: `Bearer ${secret("OPENAI_API_KEY")}` },
     body: form,
     signal: AbortSignal.timeout(15_000),
   });

@@ -1,3 +1,4 @@
+import { secret as envSecret } from "./env";
 import { randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 // Crockford-style alphabet without ambiguous characters.
@@ -20,7 +21,7 @@ export function sha256(input: string): string {
 }
 
 function secret(): string {
-  const s = process.env.APP_SECRET;
+  const s = envSecret("APP_SECRET");
   if (!s || s.length < 16) throw new Error("APP_SECRET is not configured");
   return s;
 }

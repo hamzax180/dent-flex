@@ -9,7 +9,7 @@ if (process.env.DATABASE_URL) {
   const direct = { ...process.env, DATABASE_URL: process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL };
   run("npx prisma migrate deploy", direct);
   // The seed is idempotent. Only run it with a real admin password, never the demo default.
-  if ((process.env.SEED_ADMIN_PASSWORD ?? "").length >= 12 && process.env.SEED_ADMIN_EMAIL) run("npx tsx prisma/seed.ts", direct);
+  if ((process.env.SEED_ADMIN_PASSWORD ?? "").trim().length >= 12 && process.env.SEED_ADMIN_EMAIL?.trim()) run("npx tsx prisma/seed.ts", direct);
   else {
     console.warn(
       `[vercel-build] skipping seed: SEED_ADMIN_EMAIL length ${(process.env.SEED_ADMIN_EMAIL ?? "").length}, ` +

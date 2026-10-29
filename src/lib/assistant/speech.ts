@@ -1,3 +1,4 @@
+import { secret } from "../env";
 import OpenAI from "openai";
 import { prisma } from "../db";
 import { ApiError } from "../errors";
@@ -47,7 +48,7 @@ export async function synthesize(text: string, lang: "en" | "tr", conversationId
   const profile = await getSetting("sales_profile");
   const voice = voiceOverride && voiceOverride !== "default" ? voiceOverride : profile.voiceGender === "male" ? process.env.OPENAI_TTS_VOICE_MALE || "onyx" : process.env.OPENAI_TTS_VOICE_FEMALE || "shimmer";
   const model = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 30_000, maxRetries: 1 });
+  const client = new OpenAI({ apiKey: secret("OPENAI_API_KEY"), timeout: 30_000, maxRetries: 1 });
   const res = await client.audio.speech.create({
     model,
     voice,

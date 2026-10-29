@@ -1,3 +1,4 @@
+import { secret } from "../env";
 import { Prisma, type Job, type Lead, type WorkflowEnrollment } from "@prisma/client";
 import { createHmac } from "node:crypto";
 import { prisma, type Tx } from "../db";
@@ -311,7 +312,7 @@ async function callWebhook(url: string, en: WorkflowEnrollment, allowlist: strin
   if (!allowlist.some((prefix) => url.startsWith(prefix))) throw new PermanentSendError("webhook_not_allowlisted", "Webhook URL is not on the allowlist.");
   // Minimal payload: no contact details.
   const body = JSON.stringify({ workflowId: en.workflowId, enrollmentId: en.id, at: new Date().toISOString() });
-  const sig = createHmac("sha256", process.env.APP_SECRET ?? "").update(body).digest("hex");
+  const sig = createHmac("sha256", secret("APP_SECRET") ?? "").update(body).digest("hex");
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", "x-dentflex-signature": sig, "idempotency-key": `${en.id}` },
