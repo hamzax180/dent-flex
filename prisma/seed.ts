@@ -17,8 +17,8 @@ async function main() {
     update: {},
     create: { email: adminEmail, name: "Demo Admin", role: "ADMIN", passwordHash: hash },
   });
-  // Demo staff share the admin demo password so role-based access can be tried locally.
-  for (const [email, name, role] of [
+  // Demo staff share the admin demo password so role-based access can be tried locally (never on Vercel).
+  for (const [email, name, role] of process.env.VERCEL ? [] : [
     ["reception@dentflex.local", "Demo Receptionist", "RECEPTIONIST"],
     ["clinician@dentflex.local", "Demo Clinician", "CLINICIAN"],
   ] as const) {
