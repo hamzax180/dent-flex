@@ -25,7 +25,7 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
-    "next": "15.5.4",
+    "next": "15.5.28",
     "openai": "^5.23.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -41,7 +41,7 @@
     "@types/three": "^0.170.0",
     "embedded-postgres": "^16.10.0-beta.15",
     "eslint": "^9",
-    "eslint-config-next": "15.5.4",
+    "eslint-config-next": "15.5.28",
     "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
